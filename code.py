@@ -70,10 +70,14 @@ F7               # sysex footer
 
 Example: This message sets the first line to "Hello" and the second line to "World"
 F0 00 20 6B 7F 42 04 02 60 01 48 65 6C 6C 6F 00 02 57 6F 72 6C 64 F7
+NOTE: For some devices, the sysex message might instead start with
+F0 00 20 6B 7F 42 04 00
+F0 00 20 6B 7F 42 04 00 60 01 48 65 6C 6C 6F 00 02 57 6F 72 6C 64 F7
 """
 
 # Define the expected header
-expected_header = [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x04, 0x02, 0x60, 0x01]
+arturia_header = [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42]
+expected_header = [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x04]
 
 while True:
     # Check for incoming MIDI messages
@@ -83,14 +87,24 @@ while True:
 
         try:
             bytes = list(message.__bytes__())
-            print("Received:", ' '.join([hex(b) for b in bytes]))
+            print("Received:", ' '.join([f"{b:02X}" for b in bytes]))
+            # lcd.clear()
+            # lcd.putstr(''.join([f"{b:02X}" for b in bytes]))
+            # print("--> https://www.google.com/search?q=%22" + '+'.join([f"{b:02X}" for b in bytes]) + "%22")
         except:
             pass
         
         # If sysex, then check if it starts with the expected header
         if isinstance(message, SystemExclusive):
-            print("Sysex received:", ' '.join([hex(b) for b in bytes]))
-            if bytes[:10] == expected_header:
+            if bytes[:6] == arturia_header:
+                print("Arturia sysex recognized")
+            #  The software driver sends the standard device inquiry using the “wildcard” device ID of 7F.
+            if bytes[:6] == [0xF0, 0x7E, 0x7F, 0x06, 0x01, 0xF7]:
+                print("Device inquiry recognized")
+                lcd.clear()
+                lcd.putstr("Received device inquiry")
+                # midi.send(SystemExclusive([0xF0, 0x7E, 0x7F, 0x06, 0x02, 0x00, 0x20, 0x6B, 0x02, 0x00, 0x05, 0x74, 0xF7]))
+            if bytes[:7] == expected_header:
                 print("Set text sysex recognized")
                 # Parse the message S1 and S2. S1 is between 0x01 and 0x00, S2 is between 0x02 and 0xF7
                 # Find the index of the first 0x01 after the header
@@ -103,7 +117,6 @@ while True:
                 index3 = bytes.index(0x02, index2)
                 index4 = bytes.index(0xF7, index3)
                 S2 = bytes[index3+1:index4]
-   
                 # Convert the bytes to a string
                 S1_string = ''.join([chr(b) for b in S1])
                 S2_string = ''.join([chr(b) for b in S2])
@@ -111,5 +124,23 @@ while True:
                 print("S2 string:", S2_string)
                 lcd.clear()
                 lcd.putstr(S1_string + "\n" + S2_string)
-            else:
-                print("Sysex not recognized")
+            # 01 - Read value
+            # F0 00 20 6B 7F 42 01 00 pp bb
+            # pp = parameter number
+            # bb = button id
+            if bytes[:6] == [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42]:
+                pp = bytes[8]
+                bb = bytes[9]
+                print(f"Read value; parameter number: {pp}, button id: {bb}")
+            # 02 - Write value
+            # F0 00 20 6B 7F 42 02 00 pp bb vv F7
+            # pp = parameter number
+            # bb = button id
+            # vv = value
+            if bytes[:6] == [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42]:
+                pp = bytes[8]
+                bb = bytes[9]
+                vv = bytes[10]
+                print(f"Write value; parameter number: {pp}, button id: {bb}, value: {vv}")
+
+# F0 7E 00 06 02 00 20 6B 02 00 05 74 F7
