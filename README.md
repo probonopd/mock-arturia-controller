@@ -8,10 +8,10 @@ Mock Arturia controller for testing MiniDexed, specifically https://github.com/p
 * Install the needed libraries in the `lib` directory as shown below
 
 ```
-lib/adafruit_mcp230xx
 lib/adafruit_hid
 lib/adafruit_midi
-lib/adafruit_character_lcd
+circuitpython_i2c_lcd.py # https://github.com/dhylands/python_lcd
+lcd_api.py # https://github.com/dhylands/python_lcd
 ```
 
 ## Development in VSCode
