@@ -1,6 +1,6 @@
 # mock-arturia-controller
 
-Mock Arturia controller for testing MiniDexed, specifically https://github.com/probonopd/MiniDexed/pull/743 using a Raspberry Pi Pico with a 16x2 character display attached via i2c.
+Mock Arturia KeyLab Essential 61 for testing MiniDexed, specifically https://github.com/probonopd/MiniDexed/pull/743 using a Raspberry Pi Pico with a 16x2 character display attached via i2c.
 
 ## Installation
 
@@ -26,7 +26,6 @@ lcd_api.py # https://github.com/dhylands/python_lcd
 
 ## TODO
 
-* Simulate Arturia USB ID and device name
-* Actually display something on the display
+* Get it to display patch names on the display sent by Arturia AnalogLab (apparently this is not happening yet - how do the Arturia plugins send data to the Arturia KeyLab Essential 61?)
 * Support rotary encoder and button to send data back to host
 * Possibly support graphical OLED mode, too
