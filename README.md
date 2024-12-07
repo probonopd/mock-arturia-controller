@@ -20,6 +20,6 @@ lib/adafruit_character_lcd
 * Press Ctrl-Shift-P, type `circuitpython:` to see the CircuitPython related commands
 * This allows to just save `code.py`, and it will be reloaded on the device and the output will be shown in the Serial Monitor
 
-# Issues
+## Issues
 
 * Currently the LCD cannot be properly controlled from CircuitPython. Why?
