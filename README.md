@@ -23,3 +23,10 @@ lib/adafruit_character_lcd
 ## Issues
 
 * Currently the LCD cannot be properly controlled from CircuitPython. Why?
+
+## TODO
+
+* Simulate Arturia USB ID and device name
+* Actually display something on the display
+* Support rotary encoder and button to send data back to host
+* Possibly support graphical OLED mode, too
