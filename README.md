@@ -1,6 +1,6 @@
 # mock-arturia-controller
 
-Mock Arturia controller for testing MiniDexed, specifically https://github.com/probonopd/MiniDexed/pull/743
+Mock Arturia controller for testing MiniDexed, specifically https://github.com/probonopd/MiniDexed/pull/743 using a Raspberry Pi Pico with a 16x2 character display attached via i2c.
 
 ## Installation
 
