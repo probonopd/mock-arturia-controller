@@ -2,8 +2,14 @@ import board
 import busio
 import usb_midi
 import adafruit_midi
-import adafruit_character_lcd.character_lcd_i2c as character_lcd
 
+from circuitpython_i2c_lcd import I2cLcd # https://github.com/dhylands/python_lcd
+
+
+def test_main():
+    """Test function for verifying basic functionality."""
+    print("Running test_main")
+    
 # Apparently all of these imports are necessary for the MIDI sysex message to be recognized
 # otherwise the message is not recognized as a known MIDI message
 from adafruit_midi.control_change import ControlChange
@@ -17,23 +23,22 @@ from adafruit_midi.system_exclusive import SystemExclusive
 from adafruit_midi.timing_clock import TimingClock
 from adafruit_midi.midi_message import MIDIMessage
 
-# Set up the 16x2 LCD display
-i2c = busio.I2C(scl=board.GP15, sda=board.GP14)
+i2c = busio.I2C(board.GP1, board.GP0)
+
+# Lock the I2C bus
+while i2c.try_lock():
+    pass
 
 # Scan for I2C devices
-# Function requires lock, so we do:
-i2c.try_lock()
 devices = i2c.scan()
-i2c.unlock()
+
 print("I2C devices found:", [hex(device) for device in devices])
 
 # Try to find LCD at address 0x27 or 0x3f
 lcd = None
 for address in (0x27, 0x3f):
     try:
-        # FIXME: Use mono display instead of RGB; how?
-        lcd = character_lcd.Character_LCD_I2C(i2c, 16, 2, address=address)
-
+        lcd = I2cLcd(i2c, address, 2, 16)
         print("LCD found at address", hex(address))
         break
     except ValueError:
@@ -42,23 +47,33 @@ for address in (0x27, 0x3f):
 if lcd is None:
     raise ValueError("No LCD found!")
 
-# Initialize the LCD
-#lcd.clear()
-#lcd.backlight = True
-#lcd.cursor = False
-#lcd.blink = True
+lcd.clear()
+lcd.putstr("It works!\nSecond line")
 
 # Write a message to the LCD, two lines
 lcd.message = "Hello\nCircuitPython!"
 
 # Print the available ports
 print("Available MIDI ports:", usb_midi.ports)
-midi = adafruit_midi.MIDI(midi_in=usb_midi.ports[0], in_channel=0, debug=True)
+midi = adafruit_midi.MIDI(midi_in=usb_midi.ports[0], in_channel=0, debug=False)
 print("MIDI input port:", usb_midi.ports[0])
 print("MIDI input channel:", midi.in_channel)
 
+"""
+Sysex message format:
+F0               # sysex header
+00 20 6B 7F 42   # Arturia header
+04 02 60         # set text
+01 S1 00         # S1 = line 1 of the text
+02 S2            # S2 = line 2 of the text
+F7               # sysex footer
+
+Example: This message sets the first line to "Hello" and the second line to "World"
+F0 00 20 6B 7F 42 04 02 60 01 48 65 6C 6C 6F 00 02 57 6F 72 6C 64 F7
+"""
+
 # Define the expected header
-expected_header = [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x04, 0x00, 0x60, 0x01]
+expected_header = [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x04, 0x02, 0x60, 0x01]
 
 while True:
     # Check for incoming MIDI messages
@@ -66,14 +81,35 @@ while True:
 
     if message is not None:
 
-        bytes = list(message.__bytes__())
-        print("Received:", ' '.join([hex(b) for b in bytes]))
+        try:
+            bytes = list(message.__bytes__())
+            print("Received:", ' '.join([hex(b) for b in bytes]))
+        except:
+            pass
         
         # If sysex, then check if it starts with the expected header
         if isinstance(message, SystemExclusive):
             print("Sysex received:", ' '.join([hex(b) for b in bytes]))
             if bytes[:10] == expected_header:
-                print("Sysex recognized!")
-                # TODO: Parse the sysex message, get the data, and display it on the LCD
+                print("Set text sysex recognized")
+                # Parse the message S1 and S2. S1 is between 0x01 and 0x00, S2 is between 0x02 and 0xF7
+                # Find the index of the first 0x01 after the header
+                index = bytes.index(0x01)
+                # Find the index of the first 0x00 after the 0x01
+                index2 = bytes.index(0x00, index)
+                # S1 is whatever is between index and index2
+                S1 = bytes[index+1:index2]
+                # Find the index of the first 0x02 after index2
+                index3 = bytes.index(0x02, index2)
+                index4 = bytes.index(0xF7, index3)
+                S2 = bytes[index3+1:index4]
+   
+                # Convert the bytes to a string
+                S1_string = ''.join([chr(b) for b in S1])
+                S2_string = ''.join([chr(b) for b in S2])
+                print("S1 string:", S1_string)
+                print("S2 string:", S2_string)
+                lcd.clear()
+                lcd.putstr(S1_string + "\n" + S2_string)
             else:
-                print("Sysex not recognized!")
+                print("Sysex not recognized")
