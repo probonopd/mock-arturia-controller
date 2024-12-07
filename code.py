@@ -5,11 +5,6 @@ import adafruit_midi
 
 from circuitpython_i2c_lcd import I2cLcd # https://github.com/dhylands/python_lcd
 
-
-def test_main():
-    """Test function for verifying basic functionality."""
-    print("Running test_main")
-    
 # Apparently all of these imports are necessary for the MIDI sysex message to be recognized
 # otherwise the message is not recognized as a known MIDI message
 from adafruit_midi.control_change import ControlChange
