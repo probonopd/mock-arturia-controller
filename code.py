@@ -50,9 +50,11 @@ lcd.message = "Hello\nCircuitPython!"
 
 # Print the available ports
 print("Available MIDI ports:", usb_midi.ports)
-midi = adafruit_midi.MIDI(midi_in=usb_midi.ports[0], in_channel=0, debug=False)
+midi = adafruit_midi.MIDI(midiIn=usb_midi.ports[0], midi_out=usb_midi.ports[1], in_channel=0, out_channel=0, debug=False)
 print("MIDI input port:", usb_midi.ports[0])
 print("MIDI input channel:", midi.in_channel)
+print("MIDI output port:", usb_midi.ports[1])
+print("MIDI output channel:", midi.out_channel)
 
 """
 Sysex message format:
@@ -123,7 +125,7 @@ while True:
             # F0 00 20 6B 7F 42 01 00 pp bb
             # pp = parameter number
             # bb = button id
-            if bytes[:6] == [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42]:
+            if bytes[:8] == [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x01, 0x00]:
                 pp = bytes[8]
                 bb = bytes[9]
                 print(f"Read value; parameter number: {pp}, button id: {bb}")
@@ -132,10 +134,15 @@ while True:
             # pp = parameter number
             # bb = button id
             # vv = value
-            if bytes[:6] == [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42]:
+            if bytes[:8] == [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x02, 0x00]:
                 pp = bytes[8]
                 bb = bytes[9]
                 vv = bytes[10]
                 print(f"Write value; parameter number: {pp}, button id: {bb}, value: {vv}")
+                # Just for testing, send a sysex message back with value 0x01; FIXME: AnalogLab does not seem to adjust the on-screen controls accordingly
+                # Maybe different messages are needed to be sent back to AnalogLab?s
+                time.sleep(0.1)
+                midi.send(SystemExclusive([0xF0, 0x00, 0x20], [0x6B, 0x7F, 0x42, 0x02, 0x00, pp, bb, 0x01]))
+
 
 # F0 7E 00 06 02 00 20 6B 02 00 05 74 F7
