@@ -25,10 +25,10 @@ RPi Pico      <-> Peripherals
 Pin 1  (GP0)  <-> Display SDA
 Pin 2  (GP1)  <-> Display SCL
 Pin 3  (GND)  <-> Display GND
-Pin 4  (GP2)  <-> Button 1
-Pin 5  (GP3)  <-> Button 2
-Pin 6  (GP4)  <-> Button 3
-Pin 7  (GP5)  <-> Button 4
+Pin 4  (GP2)  <-> Button 0
+Pin 5  (GP3)  <-> Button 1
+Pin 6  (GP4)  <-> Button 2
+Pin 7  (GP5)  <-> Button 3
 Pin 8  (GND)  <-> Button GND
 Pin 40 (VBUS) <-> Display VCC
 # """
