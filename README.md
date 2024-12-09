@@ -62,9 +62,11 @@ lcd_api.py # https://github.com/dhylands/python_lcd
 ## TODO
 
 - [x] Get it to display patch names on the display sent by Arturia AnalogLab (using undocumented Arturia sysex)
+- [x] Make it possible to browse presets using buttons
+- [ ] Make it possible to select presets using a button
+- [ ] Make it possible to browse presets using rotary encoder
 - [ ] Get it to work in a DAW like REAPER, too (it seems to use the Mackie Control Universal protocol there)
-- [ ] Support rotary encoder and button to send data back to host
-- [ ] Possibly support graphical OLED mode, too
+- [ ] Possibly support graphical OLED, too
 
 ## References
 
