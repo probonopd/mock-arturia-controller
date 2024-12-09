@@ -40,7 +40,8 @@ F0 00 20 6B 7F 42 04 00 60 01 41 52 50 20 32 36 30 30 00 02 2A 42 6C 6F 6F 64 79
 ## Installation
 
 * Install CircuitPython `.uf2` on Raspberry Pi Pico
-* Install the needed libraries in the `lib` directory as shown below
+* Install `boot.py` and `code.py` in the root of the Raspberry Pi Pico
+* Install the needed libraries in the `lib/` directory as shown below
 
 ```
 lib/adafruit_hid
