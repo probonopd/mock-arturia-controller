@@ -141,7 +141,6 @@ while True:
                 print(f"Write value; parameter number: {pp}, button id: {bb}, value: {vv}")
                 # Just for testing, send a sysex message back with value 0x01; FIXME: AnalogLab does not seem to adjust the on-screen controls accordingly
                 # Maybe different messages are needed to be sent back to AnalogLab?s
-                time.sleep(0.1)
                 midi.send(SystemExclusive([0xF0, 0x00, 0x20], [0x6B, 0x7F, 0x42, 0x02, 0x00, pp, bb, 0x01]))
 
 
