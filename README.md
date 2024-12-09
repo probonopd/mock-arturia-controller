@@ -2,6 +2,13 @@
 
 Mock Arturia KeyLab Essential 61 for testing MiniDexed, specifically https://github.com/probonopd/MiniDexed/pull/743 using a Raspberry Pi Pico with a 16x2 character display attached via i2c.
 
+## Theory of Operation
+
+Some Arturia controllers can be switched between "DAW Mode" and "Analog Lab Mode", e.g.,
+
+* Arturia Keylab mkII (MIDI)
+* Arturia Keylab mkII DAW (MIDIIN2/MIDIOUT2)
+  
 ## Installation
 
 * Install CircuitPython `.uf2` on Raspberry Pi Pico
@@ -29,3 +36,10 @@ lcd_api.py # https://github.com/dhylands/python_lcd
 * Get it to display patch names on the display sent by Arturia AnalogLab (apparently this is not happening yet - how do the Arturia plugins send data to the Arturia KeyLab Essential 61?)
 * Support rotary encoder and button to send data back to host
 * Possibly support graphical OLED mode, too
+
+## References
+
+* https://forum.arturia.com/index.php?topic=90496.0 has _some_ documentation about the protocol
+* https://www.youtube.com/watch?v=QtMN1y-Kf_w shows the Arturia Keylab mkII in action
+* https://github.com/rjuang/flstudio-arturia-keylab-mk2 may have necessary information regarding the Arturia Keylab mkII protocol
+
