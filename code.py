@@ -16,7 +16,7 @@ from adafruit_midi.start import Start
 from adafruit_midi.stop import Stop
 from adafruit_midi.system_exclusive import SystemExclusive
 from adafruit_midi.timing_clock import TimingClock
-from adafruit_midi.midi_message import MIDIMessage
+from adafruit_midi.midi_message import MIDIMessage, MIDIUnknownEvent
 
 i2c = busio.I2C(board.GP1, board.GP0)
 
@@ -43,84 +43,96 @@ if lcd is None:
     raise ValueError("No LCD found!")
 
 lcd.clear()
-lcd.putstr("It works!\nSecond line")
-
-# Write a message to the LCD, two lines
-lcd.message = "Hello\nCircuitPython!"
+lcd.backlight = True
 
 # Print the available ports
 print("Available MIDI ports:", usb_midi.ports)
-midi = adafruit_midi.MIDI(midiIn=usb_midi.ports[0], midi_out=usb_midi.ports[1], in_channel=0, out_channel=0, debug=False)
+# NOTE: If in_buf_size is too small, then MIDIUnknownEvent is received instead of the actual message;
+# in this case,  need to increase in_buf_size further
+midi = adafruit_midi.MIDI(midi_in=usb_midi.ports[0], midi_out=usb_midi.ports[1], in_channel=0, out_channel=0, in_buf_size=128, debug=True)
 print("MIDI input port:", usb_midi.ports[0])
 print("MIDI input channel:", midi.in_channel)
 print("MIDI output port:", usb_midi.ports[1])
 print("MIDI output channel:", midi.out_channel)
 
 """
-Sysex message format:
+Sysex message format used by Arturia KeyLab Essential 61 with AnalogLab to write to the display:
 F0               # sysex header
 00 20 6B 7F 42   # Arturia header
-04 02 60         # set text
-01 S1 00         # S1 = line 1 of the text
-02 S2            # S2 = line 2 of the text
+04 00 60         # set text
+01 S1 00         # S1 = Instrument (e.g. 'ARP 2600')
+02 S2 00         # S2 = Name (e.g. 'Bloody Swing')
+02 S3 00         # S3 = Type (e.g. 'Noise')
+02 S4 00         # S4 = Whether to display a heart (if 46 20, then display a heart; if nonexistent, then do not display a heart)
 F7               # sysex footer
 
-Example: This message sets the first line to "Hello" and the second line to "World"
-F0 00 20 6B 7F 42 04 02 60 01 48 65 6C 6C 6F 00 02 57 6F 72 6C 64 F7
-NOTE: For some devices, the sysex message might instead start with
-F0 00 20 6B 7F 42 04 00
-F0 00 20 6B 7F 42 04 00 60 01 48 65 6C 6C 6F 00 02 57 6F 72 6C 64 F7
+Example with heart:
+F0 00 20 6B 7F 42 04 00 60 01 41 52 50 20 32 36 30 30 00 02 2A 42 6C 6F 6F 64 79 20 53 77 69 6E 67 00 03 4E 6F 69 73 65 00 04 46 20 00 F7
+Example without heart:
+F0 00 20 6B 7F 42 04 00 60 01 41 52 50 20 32 36 30 30 00 02 2A 42 6C 6F 6F 64 79 20 53 77 69 6E 67 00 03 4E 6F 69 73 65 00 04 00 F7
 """
-
-# Define the expected header
-arturia_header = [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42]
-expected_header = [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x04]
 
 while True:
     # Check for incoming MIDI messages
     message = midi.receive()
+    
+    try:
+        bytes = list(message.__bytes__())
+        print("Received:", ' '.join([f"{b:02X}" for b in bytes]))
+        # lcd.clear()
+        # lcd.putstr(''.join([f"{b:02X}" for b in bytes]))
+        # print("--> https://www.google.com/search?q=%22" + '+'.join([f"{b:02X}" for b in bytes]) + "%22")
+    except:
+        pass
 
     if message is not None:
+        print("Message:", message)
 
-        try:
-            bytes = list(message.__bytes__())
-            print("Received:", ' '.join([f"{b:02X}" for b in bytes]))
-            # lcd.clear()
-            # lcd.putstr(''.join([f"{b:02X}" for b in bytes]))
-            # print("--> https://www.google.com/search?q=%22" + '+'.join([f"{b:02X}" for b in bytes]) + "%22")
-        except:
-            pass
+        # If MIDIUnknownEvent, then print a message explaining how to debug
+        if isinstance(message, MIDIUnknownEvent):
+            print("MIDIUnknownEvent received")
+            print("See the contents of the message by setting debug=True in the adafruit_midi.MIDI object")
+            print("Most likely in_buf_size needs to be further increased")
         
         # If sysex, then check if it starts with the expected header
         if isinstance(message, SystemExclusive):
-            if bytes[:6] == arturia_header:
+            if bytes[:6] == [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42]:
                 print("Arturia sysex recognized")
-            #  The software driver sends the standard device inquiry using the “wildcard” device ID of 7F.
-            if bytes[:6] == [0xF0, 0x7E, 0x7F, 0x06, 0x01, 0xF7]:
-                print("Device inquiry recognized")
-                lcd.clear()
-                lcd.putstr("Received device inquiry")
-                # midi.send(SystemExclusive([0xF0, 0x7E, 0x7F, 0x06, 0x02, 0x00, 0x20, 0x6B, 0x02, 0x00, 0x05, 0x74, 0xF7]))
-            if bytes[:7] == expected_header:
+            if bytes[:9] == [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x04, 0x00, 0x60]:
                 print("Set text sysex recognized")
-                # Parse the message S1 and S2. S1 is between 0x01 and 0x00, S2 is between 0x02 and 0xF7
-                # Find the index of the first 0x01 after the header
-                index = bytes.index(0x01)
-                # Find the index of the first 0x00 after the 0x01
-                index2 = bytes.index(0x00, index)
-                # S1 is whatever is between index and index2
-                S1 = bytes[index+1:index2]
-                # Find the index of the first 0x02 after index2
-                index3 = bytes.index(0x02, index2)
-                index4 = bytes.index(0xF7, index3)
-                S2 = bytes[index3+1:index4]
+                # Find the indices of the bytes
+                first_0x01 = bytes.index(0x01)
+                first_0x00_after_0x01 = bytes.index(0x00, first_0x01)
+                first_0x02_after_0x00 = bytes.index(0x02, first_0x00_after_0x01)
+                first_0x00_after_0x02 = bytes.index(0x00, first_0x02_after_0x00)
+                first_0x03_after_0x00 = bytes.index(0x03, first_0x00_after_0x02)
+                first_0x00_after_0x03 = bytes.index(0x00, first_0x03_after_0x00)
+                first_0x04_after_0x00 = bytes.index(0x04, first_0x00_after_0x03)
+                first_0x00_after_0x04 = bytes.index(0x00, first_0x04_after_0x00)
+                first_0xF7_after_0x00 = bytes.index(0xF7, first_0x00_after_0x04)
+                # Extract the strings
+                S1 = bytes[first_0x01 + 1:first_0x00_after_0x01]
+                S2 = bytes[first_0x02_after_0x00 + 1:first_0x00_after_0x02]
+                S3 = bytes[first_0x03_after_0x00 + 1:first_0x00_after_0x03]
+                S4 = bytes[first_0x04_after_0x00 + 1:first_0x00_after_0x04]
                 # Convert the bytes to a string
                 S1_string = ''.join([chr(b) for b in S1])
                 S2_string = ''.join([chr(b) for b in S2])
-                print("S1 string:", S1_string)
-                print("S2 string:", S2_string)
+                S3_string = ''.join([chr(b) for b in S3])
+                S4_string = ''.join([chr(b) for b in S4])
+                print("Instrument:", S1_string)
+                print("Name:", S2_string)
+                print("Type:", S3_string)
+                # If the bytes are 46 20, then it is a heart
+                if S4 == [0x46, 0x20]:
+                    print("Heart")
+                    # Replace the "*" ASCII character with a heart symbol
+                    S2_string = S2_string.replace('*', '!')
+                    # TODO: Display an actual heart symbol instead of '!'
+                else:
+                    print("No heart")
                 lcd.clear()
-                lcd.putstr(S1_string + "\n" + S2_string)
+                lcd.putstr(S1_string + '\n' + S2_string)
             # 01 - Read value
             # F0 00 20 6B 7F 42 01 00 pp bb
             # pp = parameter number
@@ -141,7 +153,9 @@ while True:
                 print(f"Write value; parameter number: {pp}, button id: {bb}, value: {vv}")
                 # Just for testing, send a sysex message back with value 0x01; FIXME: AnalogLab does not seem to adjust the on-screen controls accordingly
                 # Maybe different messages are needed to be sent back to AnalogLab?s
-                midi.send(SystemExclusive([0xF0, 0x00, 0x20], [0x6B, 0x7F, 0x42, 0x02, 0x00, pp, bb, 0x01]))
+                # midi.send(SystemExclusive([0xF0, 0x00, 0x20], [0x6B, 0x7F, 0x42, 0x02, 0x00, pp, bb, 0x01]))
 
-
-# F0 7E 00 06 02 00 20 6B 02 00 05 74 F7
+# When "Mackie Control" is selected in REAPER under "Control/OSC/Web", REAPER sends the following message when exiting:
+# [f0 00 00 66 14 08 00 f7]
+# This is from the "Mackie Control Universal" (MCU) protocol
+# It is currently unknown whether Arturia devices can use the screen via this protocol
