@@ -4,10 +4,7 @@ Mock Arturia KeyLab Essential 61 for testing MiniDexed, specifically https://git
 
 ## Theory of Operation
 
-Some Arturia controllers can be switched between "DAW Mode" and "Analog Lab Mode", e.g.,
-
-* Arturia Keylab mkII (MIDI)
-* Arturia Keylab mkII DAW (MIDIIN2/MIDIOUT2)
+The AnalogLab standalone application sends special MIDI System Exclusive (sysex) messages to the controller if the name of the MIDI device matches certain names, such as "Arturia KeyLab Essential 61".
   
 ## Installation
 
@@ -33,9 +30,10 @@ lcd_api.py # https://github.com/dhylands/python_lcd
 
 ## TODO
 
-* Get it to display patch names on the display sent by Arturia AnalogLab (apparently this is not happening yet - how do the Arturia plugins send data to the Arturia KeyLab Essential 61?)
-* Support rotary encoder and button to send data back to host
-* Possibly support graphical OLED mode, too
+- [x] Get it to display patch names on the display sent by Arturia AnalogLab (using undocumented Arturia sysex)
+- [ ] Get it to work in a DAW like REAPER, too (it seems to use the Mackie Control Universal protocol there)
+- [ ] Support rotary encoder and button to send data back to host
+- [ ] Possibly support graphical OLED mode, too
 
 ## References
 
