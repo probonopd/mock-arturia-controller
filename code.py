@@ -67,7 +67,7 @@ lcd.backlight = True
 print("Available MIDI ports:", usb_midi.ports)
 # NOTE: If in_buf_size is too small, then MIDIUnknownEvent is received instead of the actual message;
 # in this case,  need to increase in_buf_size further
-midi = adafruit_midi.MIDI(midiIn=usb_midi.ports[0], midi_out=usb_midi.ports[1], in_channel=0, out_channel=0, in_buf_size=64, debug=True)
+midi = adafruit_midi.MIDI(midi_in=usb_midi.ports[0], midi_out=usb_midi.ports[1], in_channel=0, out_channel=0, in_buf_size=128, debug=True)
 print("MIDI input port:", usb_midi.ports[0])
 print("MIDI input channel:", midi.in_channel)
 print("MIDI output port:", usb_midi.ports[1])
@@ -210,12 +210,16 @@ while True:
                 if S4 == [0x46, 0x20]:
                     print("Heart")
                     # Replace the "*" ASCII character with a heart symbol
-                    S2_string = S2_string.replace('*', '!')
-                    # TODO: Display an actual heart symbol instead of '!'
+                    heart = bytearray([0x00,0x0a,0x1f,0x1f,0x0e,0x04,0x00,0x00])
+                    lcd.custom_char(0, heart)
+                    S2_string = S2_string.replace('*', chr(0))
                 else:
                     print("No heart")
                 lcd.clear()
-                lcd.putstr(S1_string + '\n' + S2_string)
+                lcd.move_to(0, 0)
+                lcd.putstr(S1_string)
+                lcd.move_to(0, 1)
+                lcd.putstr(S2_string)
                 #except:
                 #    print("Error processing sysex message")
             # 01 - Read value
