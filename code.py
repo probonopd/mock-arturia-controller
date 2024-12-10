@@ -67,7 +67,7 @@ lcd.backlight = True
 print("Available MIDI ports:", usb_midi.ports)
 # NOTE: If in_buf_size is too small, then MIDIUnknownEvent is received instead of the actual message;
 # in this case,  need to increase in_buf_size further
-midi = adafruit_midi.MIDI(midi_in=usb_midi.ports[0], midi_out=usb_midi.ports[1], in_channel=0, out_channel=0, in_buf_size=64, debug=True)
+midi = adafruit_midi.MIDI(midiIn=usb_midi.ports[0], midi_out=usb_midi.ports[1], in_channel=0, out_channel=0, in_buf_size=64, debug=True)
 print("MIDI input port:", usb_midi.ports[0])
 print("MIDI input channel:", midi.in_channel)
 print("MIDI output port:", usb_midi.ports[1])
@@ -103,8 +103,8 @@ while True:
                 buttons_pressed[i] = True
                 print(f"Button {i} pressed")
                 if i == 0:
-                    # TODO: Some useful function
-                    pass
+                    # Like/unlike
+                    midi.send(ControlChange(115, 127))
                 elif i == 1:#
                     # Previous preset
                     midi.send(ControlChange(112, 1))
@@ -113,7 +113,7 @@ while True:
                     midi.send(ControlChange(112, 127))
                 elif i == 3:
                     # TODO: OK/Enter
-                    pass
+                    midi.send(ControlChange(115, 1))
         elif button.value and buttons_pressed[i]:
             time.sleep(debounce_time)
             if button.value:
@@ -138,7 +138,8 @@ while True:
 
     CC 114 value 127: Next preset but different?
 
-    CC 115 value 127: Like/unlike again?
+    CC 115 value 0...63:   OK/Enter
+    CC 115 value 64...127: Like/unlike again?
 
     116 value 127: ?
 
