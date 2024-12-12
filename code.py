@@ -1,8 +1,10 @@
 import board
+import rotaryio
 import busio
 import usb_midi
 import adafruit_midi
 import digitalio
+import time
 
 from circuitpython_i2c_lcd import I2cLcd # https://github.com/dhylands/python_lcd
 
@@ -18,7 +20,6 @@ from adafruit_midi.stop import Stop
 from adafruit_midi.system_exclusive import SystemExclusive
 from adafruit_midi.timing_clock import TimingClock
 from adafruit_midi.midi_message import MIDIMessage, MIDIUnknownEvent
-import time
 
 """
 RPi Pico      <-> Peripherals  
@@ -30,13 +31,25 @@ Pin 5  (GP3)  <-> Button 1
 Pin 6  (GP4)  <-> Button 2
 Pin 7  (GP5)  <-> Button 3
 Pin 8  (GND)  <-> Button GND
+Pin 9  (GP6)  <-> Rotary Encoder CLK
+Pin 10 (GP7)  <-> Rotary Encoder DT
+Pin 11 (GP8)  <-> Rotary Encoder SW
+Pin 12 (GP9)  <-> Rotary Encoder +
+Pin 13 (GND)  <-> Rotary Encoder GND
 Pin 40 (VBUS) <-> Display VCC
 # """
 
 # Enable pull-up resistors for the buttons
-buttons = [digitalio.DigitalInOut(pin) for pin in (board.GP2, board.GP3, board.GP4, board.GP5)]
+buttons = [digitalio.DigitalInOut(pin) for pin in (board.GP2, board.GP3, board.GP4, board.GP5, board.GP8)]
 for button in buttons:
     button.switch_to_input(pull=digitalio.Pull.UP)
+
+# Set up rotary encoder
+encoder = rotaryio.IncrementalEncoder(board.GP6, board.GP7)
+last_position = None
+# Switch on + pin of rotary encoder
+switch = digitalio.DigitalInOut(board.GP9)
+switch.switch_to_input(pull=digitalio.Pull.UP)
 
 # Initialize and lock the I2C bus
 i2c = busio.I2C(board.GP1, board.GP0)
@@ -67,7 +80,7 @@ lcd.backlight = True
 print("Available MIDI ports:", usb_midi.ports)
 # NOTE: If in_buf_size is too small, then MIDIUnknownEvent is received instead of the actual message;
 # in this case,  need to increase in_buf_size further
-midi = adafruit_midi.MIDI(midi_in=usb_midi.ports[0], midi_out=usb_midi.ports[1], in_channel=0, out_channel=0, in_buf_size=128, debug=True)
+midi = adafruit_midi.MIDI(midi_in=usb_midi.ports[0], midi_out=usb_midi.ports[1], in_channel=0, out_channel=0, in_buf_size=512, debug=True)
 print("MIDI input port:", usb_midi.ports[0])
 print("MIDI input channel:", midi.in_channel)
 print("MIDI output port:", usb_midi.ports[1])
@@ -89,40 +102,116 @@ F0 00 20 6B 7F 42 04 00 60 01 41 52 50 20 32 36 30 30 00 02 2A 42 6C 6F 6F 64 79
 Example without heart:
 F0 00 20 6B 7F 42 04 00 60 01 41 52 50 20 32 36 30 30 00 02 2A 42 6C 6F 6F 64 79 20 53 77 69 6E 67 00 03 4E 6F 69 73 65 00 04 00 F7
 """
-buttons_pressed = [False, False, False, False]
+buttons_pressed = [False, False, False, False, False]
 
 debounce_time = 0.05  # 50 ms debounce time
 
+#####################################################
+# This block is just for testing purposes, shall be removed later
+index = 0
+# potential_cc = [0, 6, 32, 38, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 111, 113, 114, 115, 116, 117, 118, 119]
+# 20...31, 52...63, 85...87, 89...90
+# potential_cc = [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+#                 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
+#                 85, 86, 87, 89, 90]
+# potential_values = [0, 1, 63, 64, 126, 127]
+potential_cc = [117]
+potential_values = [64]
+# Make a list of all combinations of potential CCs and values
+combinations = [(cc, value) for cc in potential_cc for value in potential_values]
+#####################################################
+
 while True:
+
+    # Handle rotary encoder
+    position = encoder.position
+    if last_position is None or position != last_position:
+        print(position)
+        print(buttons[4].value)
+        # If the new position is greater than the last position, then the encoder was turned clockwise
+        if last_position is not None and position > last_position:
+            print("Clockwise")
+            # Check if the switch is pressed
+            if not buttons[4].value:
+                print("Switch pressed")
+                midi.send(ControlChange(28, 1))
+            else:
+                print("Switch not pressed")
+                midi.send(ControlChange(112, 127))
+        # If the new position is less than the last position, then the encoder was turned counterclockwise
+        elif last_position is not None and position < last_position:
+            print("Counterclockwise")
+            # Check if the switch is pressed
+            if not buttons[4].value:
+                print("Switch pressed")
+                midi.send(ControlChange(29, 1))
+            else:
+                print("Switch not pressed")
+                midi.send(ControlChange(112, 1))
+
+    last_position = position
 
     # Check for button presses, debounce them, and trigger the corresponding actions
     for i, button in enumerate(buttons):
         if not button.value and not buttons_pressed[i]:
+            buttons_pressed[i] = True
             time.sleep(debounce_time)
-            if not button.value:
-                buttons_pressed[i] = True
-                print(f"Button {i} pressed")
-                if i == 0:
-                    # Like/unlike
-                    midi.send(ControlChange(115, 127))
-                elif i == 1:#
-                    # Previous preset
-                    midi.send(ControlChange(112, 1))
-                elif i == 2:
-                    # Next preset
-                    midi.send(ControlChange(112, 127))
-                elif i == 3:
-                    # TODO: OK/Enter
-                    midi.send(ControlChange(115, 1))
+            print(f"Button {i} pressed")
+            
+            if i == 0:
+                # Send one CC per click
+                cc, value = combinations[index]
+                print(f"************* Sending CC {cc} with value {value}")
+                midi.send(ControlChange(cc, value))
+                # LCD display
+                lcd.clear()
+                lcd.move_to(0, 0)
+                lcd.putstr(f"CC {cc}")
+                lcd.move_to(0, 1)
+                lcd.putstr(f"Value {value}")
+                index = index + 1
+                if index >= len(combinations):
+                    index = 0
+
+            elif i == 1:
+                # Previous preset
+                midi.send(ControlChange(28, 1))
+            elif i == 2:
+                # Next preset
+                midi.send(ControlChange(29, 1))
+            elif i == 3:
+                # Menu
+                midi.send(ControlChange(116, 64))
+            elif i == 4:
+                # Encoder OK/Enter
+                midi.send(ControlChange(115, 1))
         elif button.value and buttons_pressed[i]:
             time.sleep(debounce_time)
             if button.value:
                 buttons_pressed[i] = False
                 print(f"Button {i} released")
+                if i == 0:
+                    midi.send(ControlChange(117, 0))
+                elif i == 1:
+                    midi.send(ControlChange(28, 0))
+                elif i == 2:
+                    midi.send(ControlChange(29, 0))
+                elif i == 3:
+                    midi.send(ControlChange(116, 0))
+                elif i == 4:
+                    pass # midi.send(ControlChange(113, 0))
         
     """
     Arturia CC messages
     # TODO: Find out which messages an Arturia controller sends when the buttons are pressed: left, right, up, down, select/enter, back, etc.
+
+    CC 28 value 0:   Nothing
+    CC 28 value 1...127: Next preset with selecting it (alphabetical)
+
+    CC 29 value 0:   Nothing
+    CC 29 value 1...127: Previous preset with selecting it (alphabetical)
+
+    CC 100 to CC 107: Results in no messages being sent from AnalogLab to the controller
 
     CC 109 value 127: Nothing?
     
@@ -131,19 +220,31 @@ while True:
     CC 111 value 127: ?
 
     CC 112 value 0:   Nothing
-    CC 112 value 1:   Prev preset
-    CC 112 value 127: Next preset
+    CC 112 value 1:   Prev preset without selecting it
+    CC 112 value 127: Next preset without selecting it
 
-    CC 113 value 127: Like/unlike
+    CC 113 value 0...63:   OK/Enter
+    CC 113 value 64...127: Like/unlike
 
-    CC 114 value 127: Next preset but different?
+    CC 114 value 0:   Nothing
+    CC 114 value 1:   Prev preset without selecting it
+    CC 114 value 127: Next preset without selecting it
 
     CC 115 value 0...63:   OK/Enter
-    CC 115 value 64...127: Like/unlike again?
+    CC 115 value 64...127: Like/unlike
 
-    116 value 127: ?
+    CC 116 value 0: Does nothing
+    CC 116 value 1...63: Goes out of the menu
+    CC 116 value 64...127: Goes into the Instruments menu, from there can go to Types, My Favorites, Sound Banks using CC 28 and CC 29
+    
+    CC 117 value 0: Does nothing
+    CC 116 value 1...63: ?
+    CC 116 value 64...127: Goes out of the menu
 
-    117 value 127: ?
+    CC 118 value 0...127 causes a lot of messages to be send from AnalogLab to the controller
+    
+    https://forum.arturia.com/t/sysex-protocol-documentation/5746/3
+    ENC_CLICK = 118, ENC_SHIFT_CLICK = 119
     """
 
     # Check for incoming MIDI messages
