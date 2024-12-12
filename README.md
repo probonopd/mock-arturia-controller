@@ -14,6 +14,11 @@ Mock Arturia KeyLab Essential 61 for testing MiniDexed, specifically https://git
 | Pin 6  (GP4)  | Button 2    |
 | Pin 7  (GP5)  | Button 3    |
 | Pin 8  (GND)  | Button GND  |
+| Pin 9  (GP6)  | Rotary Encoder CLK |
+| Pin 10 (GP7)  | Rotary Encoder DT  |
+| Pin 11 (GP8)  | Rotary Encoder SW  |
+| Pin 12 (GP9)  | Rotary Encoder +    |
+| Pin 13 (GND)  | Rotary Encoder GND  |
 | Pin 40 (VBUS) | Display VCC |
 
 ## Theory of Operation
