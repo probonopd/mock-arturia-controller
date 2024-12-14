@@ -1,6 +1,12 @@
 # mock-arturia-controller
 
-Mock Arturia KeyLab Essential 61 for testing MiniDexed, specifically https://github.com/probonopd/MiniDexed/pull/743 using a Raspberry Pi Pico with a 16x2 character display attached via i2c.
+Emulate ("mock") parts of Arturia KeyLab for compatibility testing of the menu-driven operation ("AnalogLab mode"), specifically for https://github.com/probonopd/MiniDexed/pull/743.
+
+Specifically, the objective is to emulate ("mock") this area of an Arturia controller
+
+![image](https://github.com/user-attachments/assets/49d67184-bd86-43f2-b285-898e790acd32)
+
+using inexpensive hardware (Raspberry Pi Pico, i2c display, rotary encoder, 4 buttons).
 
 ## Hardware wiring
 
