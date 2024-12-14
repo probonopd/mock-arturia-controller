@@ -1,29 +1,23 @@
+# NOTE: For this to take effect
+# 1. You need to power cycle the device
+# 2. You need to restart AnalogLab
+# 3. You need to select a MIDI port with a well-known name in AnalogLab
+# 4. You need to select a MIDI controller in AnalogLab that belongs to the device selected as the MIDI port
+
 import supervisor
 import usb_midi
 import usb_hid
 
+# According to https://www.youtube.com/watch?v=ipnTPsDN3t4, the MIDI port is called "Keylab mkII 61 MIDI"
+# USB vendor ID, USB product ID, USB manufacturer string, USB product string, MIDI interface name (that shows up in AnalogLab)
+emulated_protocols = [(0x1c75, 0x028a, "Arturia", "Arturia KeyLab Essential 61", "Arturia KeyLab Essential 61"), # Works
+                      (0x1c75, 0x028b, "Arturia", "KeyLab mkII 61", "KeyLab mkII 61 MIDI"), # Works
+                      (0x1c75, 0x0285, "Arturia", "KeyLab 61", "KeyLab 61")] # Works but seems to have DIFFERENT MIDI CC mappings than the KeyLab mkII 61
+
+which_protocol = 1
+
 usb_hid.disable()
-
-# Vendor: usb 0x1c75 "Arturia"
-# Device: usb 0x028a "KeyLab Essential 61"
-supervisor.set_usb_identification(manufacturer="Arturia", product="Arturia KeyLab Essential 61", vid=0x1c75, pid=0x028a)
-
-# Arturia KeyLab mkII 61
-# USB ID 1c75:028b
-# supervisor.set_usb_identification(manufacturer="Arturia", product="KeyLab mkII 61", vid=0x1c75, pid=0x028b)
-
-# The following seems to be necessary so that Arturia AnalogLab sends MIDI messages to the device
-# This determines the name of the MIDI port visible in Arturia AnalogLab
-# usb_midi.set_names(streaming_interface_name="Arturia Keylab mkII 61", audio_control_interface_name="Arturia Keylab mkII 61")
-# With "Arturia KeyLab 61" it gets no messages from AnalogLab (standalone) - TO BE RETESTED WITH PROPER USB IDs
-# With "Arturia Keylab mkII (MIDI)" it gets no messages from AnalogLab (standalone) - TO BE RETESTED WITH PROPER USB IDs
-# With "Arturia Keylab mkII DAW (MIDIIN2/MIDIOUT2)" does not even show up in AnalogLab (standalone) - ??? 
-# With "Arturia KeyLab Essential 61" it gets messages but not for the display???
-usb_midi.set_names(streaming_interface_name="Arturia KeyLab Essential 61", audio_control_interface_name="Arturia KeyLab Essential 61") # Known to work
-# With "Arturia MiniLab 3" it gets no messages - TO BE RETESTED WITH PROPER USB IDs
-# Does this need to match the USB product name?
-
+supervisor.set_usb_identification(manufacturer=emulated_protocols[which_protocol][2], product=emulated_protocols[which_protocol][3], vid=emulated_protocols[which_protocol][0], pid=emulated_protocols[which_protocol][1])
+usb_midi.set_names(streaming_interface_name=emulated_protocols[which_protocol][4], audio_control_interface_name=emulated_protocols[which_protocol][4])
 usb_midi.enable()
 print("enabled USB MIDI, disabled USB HID")
-
-# NOTE: Making changes here requires power cycling the device
