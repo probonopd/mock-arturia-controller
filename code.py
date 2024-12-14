@@ -21,6 +21,11 @@ from adafruit_midi.system_exclusive import SystemExclusive
 from adafruit_midi.timing_clock import TimingClock
 from adafruit_midi.midi_message import MIDIMessage, MIDIUnknownEvent
 
+# QUESTION: How does the controller know which names the knobs and faders have? Is this information sent from the DAW to the controller?
+# Or does the controller just get the CC number and has to look up the name in a table, depending on the selected instrument?
+# If the latter is the case, then this would mean that the controller firmware needs to be updated every time a new instrument is released.
+# This does not seem to be the case. So how does it work?
+
 """
 RPi Pico      <-> Peripherals  
 Pin 1  (GP0)  <-> Display SDA
@@ -38,6 +43,11 @@ Pin 12 (GP9)  <-> Rotary Encoder +
 Pin 13 (GND)  <-> Rotary Encoder GND
 Pin 40 (VBUS) <-> Display VCC
 # """
+
+# Built-in LED
+led = digitalio.DigitalInOut(board.LED)
+led.direction = digitalio.Direction.OUTPUT
+led.value = False
 
 # Enable pull-up resistors for the buttons
 buttons = [digitalio.DigitalInOut(pin) for pin in (board.GP2, board.GP3, board.GP4, board.GP5, board.GP8)]
@@ -109,16 +119,26 @@ debounce_time = 0.05  # 50 ms debounce time
 #####################################################
 # This block is just for testing purposes, shall be removed later
 index = 0
-# potential_cc = [0, 6, 32, 38, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 111, 113, 114, 115, 116, 117, 118, 119]
 # 20...31, 52...63, 85...87, 89...90
-# potential_cc = [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
-#                 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
-#                 85, 86, 87, 89, 90]
-# potential_values = [0, 1, 63, 64, 126, 127]
-potential_cc = [117]
-potential_values = [64]
+# potential_cc = [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 85, 86, 87, 89, 90]
+# 110...117
+potential_cc = [110, 111, 112, 113, 114, 115, 116, 117]
+potential_values = [63, 64]
 # Make a list of all combinations of potential CCs and values
 combinations = [(cc, value) for cc in potential_cc for value in potential_values]
+# 28 63 shows menu
+# 28 64 shows menu
+# 29 63 shows next menu
+# 29 64 shows next menu
+# 30 63 shows prev menu
+# 30 64 nothing
+# 85 64 shows "Unassigned" for a while
+# 112 63 shwos menu
+# 112 64 nothing
+# 113 63 shows menu
+# 113 64 shows liked, and goes out of menu
+# Somewhere there the magic happens: we go into the submenu of e.g., Instruments and can select the instrument there
+# 116 63 nothing
 #####################################################
 
 while True:
@@ -159,6 +179,8 @@ while True:
             print(f"Button {i} pressed")
             
             if i == 0:
+
+                
                 # Send one CC per click
                 cc, value = combinations[index]
                 print(f"************* Sending CC {cc} with value {value}")
@@ -173,17 +195,41 @@ while True:
                 if index >= len(combinations):
                     index = 0
 
+                # "Preset" button
+                # TODO: According to https://www.youtube.com/watch?v=ipnTPsDN3t4 3:33, the "Preset" button 
+                # may not always go into Preset mode, as it is also used to "select a song from the playlist"
+                #midi.send(ControlChange(117, 64))
+                #led.value = False
+
             elif i == 1:
+                # "<-" button
                 # Previous preset
                 midi.send(ControlChange(28, 1))
             elif i == 2:
+                # "->"" button
                 # Next preset
                 midi.send(ControlChange(29, 1))
             elif i == 3:
-                # Menu
-                midi.send(ControlChange(116, 64))
+                # "Category" button
+                if led.value == False:
+                    # We are not in the menu
+                    midi.send(ControlChange(116, 64))
+                    led.value = True
+                else:
+                    # We are in the menu
+                    # TODO: What should actually happen when we are already in the menu and press the "Category" button?
+                    midi.send(ControlChange(115, 64)) # This toggles the heart (like) of the preset AND makes the encoder knob to go through the voices in the selected instrument ONLY; FIXME: Toggling like should not happen
             elif i == 4:
                 # Encoder OK/Enter
+                if led.value == False:
+                    # We are not in the menu
+                    midi.send(ControlChange(117, 1))
+                else:
+                    # We are in the menu
+                    midi.send(ControlChange(117, 1)) # FIXME: Instead, the second line should get "*" and we should NOT leave the menu
+                    # according to https://www.youtube.com/watch?v=ipnTPsDN3t4 (or has this changed in a newer AnalogLab version?)
+                    # led.value = False
+                
                 midi.send(ControlChange(115, 1))
         elif button.value and buttons_pressed[i]:
             time.sleep(debounce_time)
@@ -231,7 +277,7 @@ while True:
     CC 114 value 127: Next preset without selecting it
 
     CC 115 value 0...63:   OK/Enter
-    CC 115 value 64...127: Like/unlike
+    CC 115 value 64...127: Like/unlike toggle
 
     CC 116 value 0: Does nothing
     CC 116 value 1...63: Goes out of the menu
@@ -340,6 +386,14 @@ while True:
                 pp = bytes[8]
                 bb = bytes[9]
                 vv = bytes[10]
+
+                if bb == 89:
+                    # LCD "bye"
+                    lcd.clear()
+                    lcd.move_to(0, 0)
+                    lcd.putstr("bye")
+                    continue
+
                 print(f"Write value; parameter number: {pp}, button id: {bb}, value: {vv}")
                 # Just for testing, send a sysex message back with value 0x01; FIXME: AnalogLab does not seem to adjust the on-screen controls accordingly
                 # Maybe different messages are needed to be sent back to AnalogLab?s
