@@ -8,6 +8,8 @@ Specifically, the objective is to emulate ("mock") this area of an Arturia contr
 
 using inexpensive hardware (Raspberry Pi Pico, i2c display, rotary encoder, 4 buttons).
 
+**If you have access to an Arturia MIDI controller, you can greatly help this effort by checking/completing the information in the [wiki](../../wiki/).**
+
 ## Hardware wiring
 
 | RPi Pico      | Peripherals |
@@ -47,6 +49,8 @@ F0 00 20 6B 7F 42 04 00 60 01 41 52 50 20 32 36 30 30 00 02 2A 42 6C 6F 6F 64 79
 Example without heart:
 F0 00 20 6B 7F 42 04 00 60 01 41 52 50 20 32 36 30 30 00 02 2A 42 6C 6F 6F 64 79 20 53 77 69 6E 67 00 03 4E 6F 69 73 65 00 04 00 F7
 ```
+
+When buttons are pressed and when the rotary encoder is moved, then certain MIDI messages need to be sent as documented in the [wiki](../../wiki/).
   
 ## Installation
 
