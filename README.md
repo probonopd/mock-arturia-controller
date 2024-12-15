@@ -10,7 +10,12 @@ using inexpensive hardware (Raspberry Pi Pico, i2c display, rotary encoder, 4 bu
 
 **If you have access to an Arturia MIDI controller, you can greatly help this effort by checking/completing the information in the [wiki](../../wiki/).**
 
-## Hardware wiring
+## Hardware
+
+* Raspberry Pi Pico
+* 26x2 character LCD with i2c "backpack"
+* KY-040-02 rotary encoder
+* 3D printable [housing](https://github.com/probonopd/mock-arturia-controller/releases/tag/housing)
 
 | RPi Pico      | Peripherals |
 |---------------|-------------|
