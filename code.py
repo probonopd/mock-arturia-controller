@@ -5,6 +5,8 @@ import usb_midi
 import adafruit_midi
 import digitalio
 import time
+import sys
+import select
 
 from circuitpython_i2c_lcd import I2cLcd # https://github.com/dhylands/python_lcd
 
@@ -141,7 +143,38 @@ combinations = [(cc, value) for cc in potential_cc for value in potential_values
 # 116 63 nothing
 #####################################################
 
+
+
 while True:
+    # Check for Serial commands without blocking
+    # This can be useful for testing purposes during development
+    if select.select([sys.stdin], [], [], 0.1)[0]:
+        data = input()
+        print(data)
+        if data == "hello":
+            print("world")
+        # Check if we have received a message from the Serial port containing the CC and value
+        # which are separated by a space and each could be binary or hexadecimal
+        # Example: "20 63" or "0x20 0x63"
+        try:
+            cc, value = data.split()
+            # Convert the strings to integers
+            cc = int(cc, 0)
+            value = int(value, 0)
+            # Send the CC message
+            midi.send(ControlChange(cc, value))
+        except:
+            pass
+        if data == "category" or data == "C":
+            midi.send(ControlChange(116, 64))
+            led.value = True
+        if data == "preset" or data == "P":
+            midi.send(ControlChange(117, 64))
+            led.value = False
+        if data == "next" or data == "n":
+            midi.send(ControlChange(29, 1))
+        if data == "previous" or data == "p":
+            midi.send(ControlChange(28, 1))
 
     # Handle rotary encoder
     position = encoder.position
@@ -313,6 +346,14 @@ while True:
             print("MIDIUnknownEvent received")
             print("See the contents of the message by setting debug=True in the adafruit_midi.MIDI object")
             print("Most likely in_buf_size needs to be further increased")
+
+        # "Universal Device Request" message
+        if bytes == [0xF0, 0x7E, 0x7F, 0x06, 0x01, 0xF7]:
+            print("Request for device ID")
+            for i in range(0, 20):
+                print("########################################################")
+                # Apparently AnalogLab does not send this, but we might want to support it
+                # e.g., for MiniDexed to find out which device it is connected to
         
         # If sysex, then check if it starts with the expected header
         if isinstance(message, SystemExclusive):
