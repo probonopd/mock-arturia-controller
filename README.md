@@ -15,6 +15,7 @@ using inexpensive hardware (Raspberry Pi Pico, i2c display, rotary encoder, 4 bu
 * Raspberry Pi Pico
 * 26x2 character LCD with i2c "backpack"
 * KY-040-02 rotary encoder
+* 4 standard button switches
 * 3D printable [housing](https://github.com/probonopd/mock-arturia-controller/releases/tag/housing)
 
 | RPi Pico      | Peripherals |
