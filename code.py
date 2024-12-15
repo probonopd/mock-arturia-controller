@@ -146,13 +146,11 @@ combinations = [(cc, value) for cc in potential_cc for value in potential_values
 
 
 while True:
-    # Check for Serial commands without blocking
+    """# Check for Serial commands without blocking
     # This can be useful for testing purposes during development
+    BUT THIS MAKES THE CODE VERY SLOW BECAUSE IT WAITS FOR INPUT
     if select.select([sys.stdin], [], [], 0.1)[0]:
         data = input()
-        print(data)
-        if data == "hello":
-            print("world")
         # Check if we have received a message from the Serial port containing the CC and value
         # which are separated by a space and each could be binary or hexadecimal
         # Example: "20 63" or "0x20 0x63"
@@ -174,7 +172,7 @@ while True:
         if data == "next" or data == "n":
             midi.send(ControlChange(29, 1))
         if data == "previous" or data == "p":
-            midi.send(ControlChange(28, 1))
+            midi.send(ControlChange(28, 1))"""
 
     # Handle rotary encoder
     position = encoder.position
