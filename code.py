@@ -5,8 +5,6 @@ import usb_midi
 import adafruit_midi
 import digitalio
 import time
-import sys
-import select
 
 from circuitpython_i2c_lcd import I2cLcd # https://github.com/dhylands/python_lcd
 
@@ -23,6 +21,10 @@ from adafruit_midi.system_exclusive import SystemExclusive
 from adafruit_midi.timing_clock import TimingClock
 from adafruit_midi.midi_message import MIDIMessage, MIDIUnknownEvent
 
+debugging_on = False
+
+mcu_mode = False # Mackie Control Universal mode; gets set to True when the sysex inquiry message is received
+
 # QUESTION: How does the controller know which names the knobs and faders have? Is this information sent from the DAW to the controller?
 # Or does the controller just get the CC number and has to look up the name in a table, depending on the selected instrument?
 # If the latter is the case, then this would mean that the controller firmware needs to be updated every time a new instrument is released.
@@ -33,10 +35,10 @@ RPi Pico      <-> Peripherals
 Pin 1  (GP0)  <-> Display SDA
 Pin 2  (GP1)  <-> Display SCL
 Pin 3  (GND)  <-> Display GND
-Pin 4  (GP2)  <-> Button 0
-Pin 5  (GP3)  <-> Button 1
-Pin 6  (GP4)  <-> Button 2
-Pin 7  (GP5)  <-> Button 3
+Pin 4  (GP2)  <-> Button 0: Category
+Pin 5  (GP3)  <-> Button 1: Preset
+Pin 6  (GP4)  <-> Button 2: <-
+Pin 7  (GP5)  <-> Button 3: ->
 Pin 8  (GND)  <-> Button GND
 Pin 9  (GP6)  <-> Rotary Encoder CLK
 Pin 10 (GP7)  <-> Rotary Encoder DT
@@ -92,7 +94,7 @@ lcd.backlight = True
 print("Available MIDI ports:", usb_midi.ports)
 # NOTE: If in_buf_size is too small, then MIDIUnknownEvent is received instead of the actual message;
 # in this case,  need to increase in_buf_size further
-midi = adafruit_midi.MIDI(midi_in=usb_midi.ports[0], midi_out=usb_midi.ports[1], in_channel=0, out_channel=0, in_buf_size=512, debug=True)
+midi = adafruit_midi.MIDI(midi_in=usb_midi.ports[0], midi_out=usb_midi.ports[1], in_channel=0, out_channel=0, in_buf_size=512, debug=debugging_on)
 print("MIDI input port:", usb_midi.ports[0])
 print("MIDI input channel:", midi.in_channel)
 print("MIDI output port:", usb_midi.ports[1])
@@ -177,26 +179,32 @@ while True:
     # Handle rotary encoder
     position = encoder.position
     if last_position is None or position != last_position:
-        print(position)
-        print(buttons[4].value)
+        # print(position)
+        # print(buttons[4].value)
         # If the new position is greater than the last position, then the encoder was turned clockwise
         if last_position is not None and position > last_position:
             print("Clockwise")
-            if led.value == False:
-                # midi.send(ControlChange(114, 64))
-                midi.send(ControlChange(114, 65))
+            if mcu_mode == True:
+                midi.send(ControlChange(0x3C , 1))
             else:
-                # midi.send(ControlChange(112, 64))
-                midi.send(ControlChange(112, 65))
+                if led.value == False:
+                    midi.send(ControlChange(114, 64))
+                    midi.send(ControlChange(114, 65))
+                else:
+                    midi.send(ControlChange(112, 64))
+                    midi.send(ControlChange(112, 65))
         # If the new position is less than the last position, then the encoder was turned counterclockwise
         elif last_position is not None and position < last_position:
             print("Counterclockwise")
-            if led.value == False:
-                # midi.send(ControlChange(114, 64))
-                midi.send(ControlChange(114, 63))
+            if mcu_mode == True:
+                midi.send(ControlChange(0x3C , 127))
             else:
-                # midi.send(ControlChange(112, 64))
-                midi.send(ControlChange(112, 63))
+                if led.value == False:
+                    midi.send(ControlChange(114, 64))
+                    midi.send(ControlChange(114, 63))
+                else:
+                    midi.send(ControlChange(112, 64))
+                    midi.send(ControlChange(112, 63))
 
     last_position = position
 
@@ -206,58 +214,65 @@ while True:
             buttons_pressed[i] = True
             time.sleep(debounce_time)
             print(f"Button {i} pressed")
-            
             if i == 0:
-
-                
-                """# Send one CC per click
-                cc, value = combinations[index]
-                print(f"************* Sending CC {cc} with value {value}")
-                midi.send(ControlChange(cc, value))
-                # LCD display
-                lcd.clear()
-                lcd.move_to(0, 0)
-                lcd.putstr(f"CC {cc}")
-                lcd.move_to(0, 1)
-                lcd.putstr(f"Value {value}")
-                index = index + 1
-                if index >= len(combinations):
-                    index = 0"""
-
-                # "Preset" button
-                # QUESTION: According to https://www.youtube.com/watch?v=ipnTPsDN3t4 3:33, the "Preset" button 
-                # may not always go into Preset mode, as it is also used to "select a song from the playlist"
-                midi.send(ControlChange(117, 127))
-                led.value = False
-
-            elif i == 1:
-                # "<-" button
-                # Previous preset
-                midi.send(ControlChange(28, 127))
-            elif i == 2:
-                # "->"" button
-                # Next preset
-                midi.send(ControlChange(29, 127))
-            elif i == 3:
                 # "Category" button
-                if led.value == False:
-                    # We are not in the menu
-                    midi.send(ControlChange(116, 127))
+                if mcu_mode == True:
+                    # https://github.com/bitwig/bitwig-extensions/blob/da7d70e73cc055475d63ac6c7de17e69f89f4993/src/main/java/com/bitwig/extensions/controllers/arturia/keylab/essential/ArturiaKeylabEssentialControllerExtension.java#L355
+                    midi.send(NoteOn(0x65, 127))
+                    midi.send(NoteOff(0x65))
                     led.value = True
                 else:
-                    # We are in the menu
-                    # QUESTION: What should actually happen when we are already in the menu and press the "Category" button?
-                    pass
+                    if led.value == False:
+                        # We are not in the menu
+                        midi.send(ControlChange(116, 127))
+                        led.value = True
+                    else:
+                        # We are in the menu
+                        # QUESTION: What should actually happen when we are already in the menu and press the "Category" button?
+                        pass
+            elif i == 1:
+                # "Preset" button
+                if mcu_mode == True:
+                    # https://github.com/bitwig/bitwig-extensions/blob/da7d70e73cc055475d63ac6c7de17e69f89f4993/src/main/java/com/bitwig/extensions/controllers/arturia/keylab/essential/ArturiaKeylabEssentialControllerExtension.java#L366
+                    midi.send(NoteOn(0x64, 127))
+                    midi.send(NoteOff(0x64))
+                    led.value = False
+                else:
+                    # QUESTION: According to https://www.youtube.com/watch?v=ipnTPsDN3t4 3:33, the "Preset" button 
+                    # may not always go into Preset mode, as it is also used to "select a song from the playlist"
+                    midi.send(ControlChange(117, 127))
+                    led.value = False
+            elif i == 2:
+                # "<-" button
+                # Previous preset
+                if mcu_mode == True:
+                    # https://github.com/bitwig/bitwig-extensions/blob/da7d70e73cc055475d63ac6c7de17e69f89f4993/src/main/java/com/bitwig/extensions/controllers/arturia/keylab/essential/ArturiaKeylabEssentialControllerExtension.java#L323
+                    midi.send(NoteOn(0x62, 127))
+                    midi.send(NoteOff(0x62))
+                else:
+                    midi.send(ControlChange(28, 127))
+            elif i == 3:
+                # "->"" button
+                # Next preset
+                if mcu_mode == True:
+                    # https://github.com/bitwig/bitwig-extensions/blob/da7d70e73cc055475d63ac6c7de17e69f89f4993/src/main/java/com/bitwig/extensions/controllers/arturia/keylab/essential/ArturiaKeylabEssentialControllerExtension.java#L339
+                    midi.send(NoteOn(0x63, 127))
+                else:
+                    midi.send(ControlChange(29, 127))
             elif i == 4:
                 # Encoder OK/Enter
-                if led.value == False:
-                    # We are not in the menu
-                    midi.send(ControlChange(115, 127))
+                if mcu_mode == True:
+                    # "MIDI_NOTE_ON 0x54"
+                    midi.send(NoteOn(0x54, 127))
+                    midi.send(NoteOff(0x54))
                 else:
-                    # We are in the menu
-                    midi.send(ControlChange(113, 127))
-                
-                midi.send(ControlChange(115, 1))
+                    if led.value == False:
+                        # We are not in the menu
+                        midi.send(ControlChange(115, 127))
+                    else:
+                        # We are in the menu
+                        midi.send(ControlChange(113, 127))
+        
         elif button.value and buttons_pressed[i]:
             time.sleep(debounce_time)
             if button.value:
@@ -315,9 +330,7 @@ while True:
     CC 116 value 64...127: Goes out of the menu
 
     CC 118 value 0...127 causes a lot of messages to be send from AnalogLab to the controller
-    
-    https://forum.arturia.com/t/sysex-protocol-documentation/5746/3
-    ENC_CLICK = 118, ENC_SHIFT_CLICK = 119
+
     """
 
     # Check for incoming MIDI messages
@@ -332,6 +345,9 @@ while True:
     except:
         pass
 
+    if isinstance(message, MIDIUnknownEvent) and debugging_on == False:
+        continue
+    
     if message is not None:
         print("Message:", message)
 
@@ -341,6 +357,19 @@ while True:
             print("See the contents of the message by setting debug=True in the adafruit_midi.MIDI object")
             print("Possibly in_buf_size needs to be further increased")
 
+        # If bytes 90 32 00, then print a message on the display
+        if bytes == [0x90, 0x32, 0x00]:
+            lcd.clear()
+            lcd.putstr("30 92 00 - Reaper, why?")
+            mcu_mode = True
+            led.value = True
+
+        if debugging_on:
+            # If not MIDIUnknownEvent, then print the bytes on the display
+            if not isinstance(message, MIDIUnknownEvent):
+                lcd.clear()
+                lcd.putstr(' '.join([f"{b:02X}" for b in bytes]))
+
         # "Universal Device Request" message
         if bytes == [0xF0, 0x7E, 0x7F, 0x06, 0x01, 0xF7]:
             print("Request for device ID")
@@ -348,7 +377,30 @@ while True:
                 print("########################################################")
                 # Apparently AnalogLab does not send this, but we might want to support it
                 # e.g., for MiniDexed to find out which device it is connected to
-        
+
+            """
+            
+            # When "Mackie Control" is selected in REAPER under "Control/OSC/Web", REAPER sends the following message when exiting:
+            # [f0 00 00 66 14 08 00 f7]
+            # This is from the "Mackie Control Universal" (MCU) protocol
+
+            sysex inquiry 0xF0, 0x7E, 0x7F, 0x06, 0x01, 0xF7.
+            The Keylab Essential 61 responds with 0xF0, 0x7E, 0x7F, 0x06, 0x02, 0x00, 0x20, 0x6B, 0x02, 0x00, 0x05, 0x54, 0xAA, 0xBB, 0xCC, 0xDD, 0xF7 (AA BB CC DD is the firmware version)
+            https://docs.rs/midi-control/latest/midi_control/vendor/arturia/index.html
+            Then it sets the DAW mode into mackie with 0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x02, 0x00, 0x40, 0x51, 0x00, 0xF7"""
+
+            # Respond with the Keylab Essential 61 device ID
+            # FIXME: How to properly send a sysex message?
+            midi.send(SystemExclusive([0xF0, 0x7E, 0x7F], [0x06, 0x02, 0x00, 0x20, 0x6B, 0x02, 0x00, 0x05, 0x54, 0x01, 0x01, 0x01, 0x01, 0xF7]))
+            # [0xF0, 0x7E, 0x7F], [0x06, 0x02, 0x00, 0x20, 0x6B, 0x02, 0x00, 0x05, 0x54, 0x01, 0x01, 0x01, 0x01]))
+            # Set the DAW mode into Mackie
+            midi.send(SystemExclusive([0xF0, 0x00, 0x20], [0x6B, 0x7F, 0x42, 0x02, 0x00, 0x40, 0x51, 0x00, 0xF7]))
+            # midi.send(SystemExclusive([0xF0, 0x00, 0x20], [0x6B, 0x7F, 0x42, 0x02, 0x00, 0x40, 0x51, 0x00]))
+            mcu_mode = True
+            led.value = True
+            lcd.clear()
+            lcd.putstr("MCU mode")
+                                  
         # If sysex, then check if it starts with the expected header
         if isinstance(message, SystemExclusive):
             if bytes[:6] == [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42]:
@@ -359,10 +411,18 @@ while True:
                 # Find the indices of the bytes
                 first_0x01 = bytes.index(0x01)
                 first_0x00_after_0x01 = bytes.index(0x00, first_0x01)
-                first_0x02_after_0x00 = bytes.index(0x02, first_0x00_after_0x01)
-                first_0x00_after_0x02 = bytes.index(0x00, first_0x02_after_0x00)
-                first_0x03_after_0x00 = bytes.index(0x03, first_0x00_after_0x02)
-                first_0x00_after_0x03 = bytes.index(0x00, first_0x03_after_0x00)
+                try:
+                    first_0x02_after_0x00 = bytes.index(0x02, first_0x00_after_0x01)
+                    first_0x00_after_0x02 = bytes.index(0x00, first_0x02_after_0x00)
+                except:
+                    first_0x02_after_0x00 = None
+                    first_0x00_after_0x02 = None
+                try:
+                    first_0x03_after_0x00 = bytes.index(0x03, first_0x00_after_0x02)
+                    first_0x00_after_0x03 = bytes.index(0x00, first_0x03_after_0x00)
+                except:
+                    first_0x03_after_0x00 = None
+                    first_0x00_after_0x03 = None
                 try:
                     first_0x04_after_0x00 = bytes.index(0x04, first_0x00_after_0x03)
                     first_0x00_after_0x04 = bytes.index(0x00, first_0x04_after_0x00)
@@ -371,23 +431,35 @@ while True:
                     first_0x00_after_0x04 = None
                 # Extract the strings
                 S1 = bytes[first_0x01 + 1:first_0x00_after_0x01]
-                S2 = bytes[first_0x02_after_0x00 + 1:first_0x00_after_0x02]
-                S3 = bytes[first_0x03_after_0x00 + 1:first_0x00_after_0x03]
+                if first_0x02_after_0x00 is not None:
+                    S2 = bytes[first_0x02_after_0x00 + 1:first_0x00_after_0x02]
+                else:
+                    S2 = None
+                if first_0x03_after_0x00 is not None:
+                    S3 = bytes[first_0x03_after_0x00 + 1:first_0x00_after_0x03]
+                else:
+                    S3 = None
                 if first_0x04_after_0x00 is not None:
                     S4 = bytes[first_0x04_after_0x00 + 1:first_0x00_after_0x04]
                 else:
                     S4 = None
                 # Convert the bytes to a string
                 S1_string = ''.join([chr(b) for b in S1])
-                S2_string = ''.join([chr(b) for b in S2])
-                S3_string = ''.join([chr(b) for b in S3])
+                if S2 is not None:
+                    S2_string = ''.join([chr(b) for b in S2])
+                else:
+                    S2_string = None
+                if S3 is not None:
+                    S3_string = ''.join([chr(b) for b in S3])
+                else:
+                    S3_string = None
                 if S4 is not None:
                     S4_string = ''.join([chr(b) for b in S4])
                 else:
                     S4_string = None
-                print("Instrument:", S1_string)
-                print("Name:", S2_string)
-                print("Type:", S3_string)
+                #print("Instrument:", S1_string)
+                #print("Name:", S2_string)
+                #print("Type:", S3_string)
                 # If the bytes are 46 20, then it is a heart
                 if S4 == [0x46, 0x20]:
                     print("Heart")
@@ -401,7 +473,8 @@ while True:
                 lcd.move_to(0, 0)
                 lcd.putstr(S1_string)
                 lcd.move_to(0, 1)
-                lcd.putstr(S2_string)
+                if S2_string is not None:
+                    lcd.putstr(S2_string)
                 #except:
                 #    print("Error processing sysex message")
             # 01 - Read value
@@ -423,10 +496,9 @@ while True:
                 vv = bytes[10]
 
                 if bb == 89:
-                    # Clear the display when AnalogLab is closing
+                    # AnalogLab is closing
                     lcd.clear()
-                    lcd.move_to(0, 0)
-                    led.value = False
+                    lcd.putstr("Bye AnalogLab")
                     continue
 
                 print(f"Write value; parameter number: {pp}, button id: {bb}, value: {vv}")
@@ -434,7 +506,8 @@ while True:
                 # Maybe different messages are needed to be sent back to AnalogLab?s
                 # midi.send(SystemExclusive([0xF0, 0x00, 0x20], [0x6B, 0x7F, 0x42, 0x02, 0x00, pp, bb, 0x01]))
 
-# When "Mackie Control" is selected in REAPER under "Control/OSC/Web", REAPER sends the following message when exiting:
-# [f0 00 00 66 14 08 00 f7]
-# This is from the "Mackie Control Universal" (MCU) protocol
-# It is currently unknown whether Arturia devices can use the screen via this protocol
+            if bytes == [0xF0, 0x00, 0x00, 0x66, 0x14, 0x08, 0x00, 0xF7]:
+                print("Bye Mackie Control Universal mode")
+                mcu_mode = False
+                lcd.clear()
+                lcd.putstr("Bye MCU mode")
