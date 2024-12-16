@@ -339,7 +339,7 @@ while True:
         if isinstance(message, MIDIUnknownEvent):
             print("MIDIUnknownEvent received")
             print("See the contents of the message by setting debug=True in the adafruit_midi.MIDI object")
-            print("Most likely in_buf_size needs to be further increased")
+            print("Possibly in_buf_size needs to be further increased")
 
         # "Universal Device Request" message
         if bytes == [0xF0, 0x7E, 0x7F, 0x06, 0x01, 0xF7]:
@@ -423,10 +423,10 @@ while True:
                 vv = bytes[10]
 
                 if bb == 89:
-                    # LCD "bye"
+                    # Clear the display when AnalogLab is closing
                     lcd.clear()
                     lcd.move_to(0, 0)
-                    lcd.putstr("bye")
+                    led.value = False
                     continue
 
                 print(f"Write value; parameter number: {pp}, button id: {bb}, value: {vv}")
