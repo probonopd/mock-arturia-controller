@@ -146,10 +146,10 @@ combinations = [(cc, value) for cc in potential_cc for value in potential_values
 
 
 while True:
-    """# Check for Serial commands without blocking
+    # Check for Serial commands without blocking
     # This can be useful for testing purposes during development
-    BUT THIS MAKES THE CODE VERY SLOW BECAUSE IT WAITS FOR INPUT
-    if select.select([sys.stdin], [], [], 0.1)[0]:
+    # BUT THIS MAKES THE CODE VERY SLOW BECAUSE IT WAITS FOR INPUT
+    """if select.select([sys.stdin], [], [], 0.1)[0]:
         data = input()
         # Check if we have received a message from the Serial port containing the CC and value
         # which are separated by a space and each could be binary or hexadecimal
@@ -182,23 +182,21 @@ while True:
         # If the new position is greater than the last position, then the encoder was turned clockwise
         if last_position is not None and position > last_position:
             print("Clockwise")
-            # Check if the switch is pressed
-            if not buttons[4].value:
-                print("Switch pressed")
-                midi.send(ControlChange(28, 1))
+            if led.value == False:
+                # midi.send(ControlChange(114, 64))
+                midi.send(ControlChange(114, 65))
             else:
-                print("Switch not pressed")
-                midi.send(ControlChange(112, 127))
+                # midi.send(ControlChange(112, 64))
+                midi.send(ControlChange(112, 65))
         # If the new position is less than the last position, then the encoder was turned counterclockwise
         elif last_position is not None and position < last_position:
             print("Counterclockwise")
-            # Check if the switch is pressed
-            if not buttons[4].value:
-                print("Switch pressed")
-                midi.send(ControlChange(29, 1))
+            if led.value == False:
+                # midi.send(ControlChange(114, 64))
+                midi.send(ControlChange(114, 63))
             else:
-                print("Switch not pressed")
-                midi.send(ControlChange(112, 1))
+                # midi.send(ControlChange(112, 64))
+                midi.send(ControlChange(112, 63))
 
     last_position = position
 
@@ -212,7 +210,7 @@ while True:
             if i == 0:
 
                 
-                # Send one CC per click
+                """# Send one CC per click
                 cc, value = combinations[index]
                 print(f"************* Sending CC {cc} with value {value}")
                 midi.send(ControlChange(cc, value))
@@ -224,42 +222,40 @@ while True:
                 lcd.putstr(f"Value {value}")
                 index = index + 1
                 if index >= len(combinations):
-                    index = 0
+                    index = 0"""
 
                 # "Preset" button
-                # TODO: According to https://www.youtube.com/watch?v=ipnTPsDN3t4 3:33, the "Preset" button 
+                # QUESTION: According to https://www.youtube.com/watch?v=ipnTPsDN3t4 3:33, the "Preset" button 
                 # may not always go into Preset mode, as it is also used to "select a song from the playlist"
-                #midi.send(ControlChange(117, 64))
-                #led.value = False
+                midi.send(ControlChange(117, 127))
+                led.value = False
 
             elif i == 1:
                 # "<-" button
                 # Previous preset
-                midi.send(ControlChange(28, 1))
+                midi.send(ControlChange(28, 127))
             elif i == 2:
                 # "->"" button
                 # Next preset
-                midi.send(ControlChange(29, 1))
+                midi.send(ControlChange(29, 127))
             elif i == 3:
                 # "Category" button
                 if led.value == False:
                     # We are not in the menu
-                    midi.send(ControlChange(116, 64))
+                    midi.send(ControlChange(116, 127))
                     led.value = True
                 else:
                     # We are in the menu
-                    # TODO: What should actually happen when we are already in the menu and press the "Category" button?
-                    midi.send(ControlChange(115, 64)) # This toggles the heart (like) of the preset AND makes the encoder knob to go through the voices in the selected instrument ONLY; FIXME: Toggling like should not happen
+                    # QUESTION: What should actually happen when we are already in the menu and press the "Category" button?
+                    pass
             elif i == 4:
                 # Encoder OK/Enter
                 if led.value == False:
                     # We are not in the menu
-                    midi.send(ControlChange(117, 1))
+                    midi.send(ControlChange(115, 127))
                 else:
                     # We are in the menu
-                    midi.send(ControlChange(117, 1)) # FIXME: Instead, the second line should get "*" and we should NOT leave the menu
-                    # according to https://www.youtube.com/watch?v=ipnTPsDN3t4 (or has this changed in a newer AnalogLab version?)
-                    # led.value = False
+                    midi.send(ControlChange(113, 127))
                 
                 midi.send(ControlChange(115, 1))
         elif button.value and buttons_pressed[i]:
