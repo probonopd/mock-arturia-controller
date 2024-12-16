@@ -87,9 +87,9 @@ lcd_api.py # https://github.com/dhylands/python_lcd
 - [x] Make it possible to browse presets using buttons
 - [x] Make it possible to select presets using a button
 - [x] Make it possible to browse categories
-- [ ] Make it possible to browse subcategories
+- [x] Make it possible to browse subcategories
 - [x] Make it possible to browse presets using rotary encoder
-- [ ] Get it to work in a DAW like REAPER, too (it seems to use the Mackie Control Universal protocol there)
+- [ ] Fix "Mackie Control Universal" protocol (to get AnalogLab to work in REAPER; this is also what MiniDexed uses)
 - [ ] Possibly support graphical OLED, too
 
 ## References
