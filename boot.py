@@ -14,7 +14,7 @@ emulated_protocols = [(0x1c75, 0x028a, "Arturia", "Arturia KeyLab Essential 61",
                       (0x1c75, 0x028b, "Arturia", "KeyLab mkII 61", "KeyLab mkII 61 MIDI"), # Works
                       (0x1c75, 0x0285, "Arturia", "KeyLab 61", "KeyLab 61")] # Works but seems to have DIFFERENT MIDI CC mappings than the KeyLab mkII 61
 
-which_protocol = 1
+which_protocol = 0
 
 usb_hid.disable()
 supervisor.set_usb_identification(manufacturer=emulated_protocols[which_protocol][2], product=emulated_protocols[which_protocol][3], vid=emulated_protocols[which_protocol][0], pid=emulated_protocols[which_protocol][1])
