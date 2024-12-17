@@ -148,7 +148,7 @@ combinations = [(cc, value) for cc in potential_cc for value in potential_values
 print("Checking for button presses...")
 for button in buttons:
     print("Button", button, "pressed:", button.value)
-# If button 4 is pressed, then enter MCU mode
+# If the encoder button is pressed, then enter MCU mode
 # Note the button is active low, so we check for False
 if buttons[4].value == False:
     mcu_mode = True
