@@ -145,7 +145,16 @@ combinations = [(cc, value) for cc in potential_cc for value in potential_values
 # 116 63 nothing
 #####################################################
 
-
+print("Checking for button presses...")
+for button in buttons:
+    print("Button", button, "pressed:", button.value)
+# If button 4 is pressed, then enter MCU mode
+# Note the button is active low, so we check for False
+if buttons[4].value == False:
+    mcu_mode = True
+    print("MCU mode enabled")
+    lcd.clear()
+    lcd.putstr("MCU mode enabled")
 
 while True:
     # Check for Serial commands without blocking
@@ -179,8 +188,6 @@ while True:
     # Handle rotary encoder
     position = encoder.position
     if last_position is None or position != last_position:
-        # print(position)
-        # print(buttons[4].value)
         # If the new position is greater than the last position, then the encoder was turned clockwise
         if last_position is not None and position > last_position:
             print("Clockwise")
@@ -264,10 +271,10 @@ while True:
                 if mcu_mode == True:
                     # "MIDI_NOTE_ON 0x54"
                     midi.send(NoteOn(0x54, 127))
-                    midi.send(NoteOff(0x54))
                 else:
                     if led.value == False:
                         # We are not in the menu
+                        # NOTE: This also functions as "Like" when long-pressed; hence we also need to send value 0 as soon as the button is released
                         midi.send(ControlChange(115, 127))
                     else:
                         # We are in the menu
@@ -287,8 +294,14 @@ while True:
                 elif i == 3:
                     midi.send(ControlChange(116, 0))
                 elif i == 4:
-                    pass # midi.send(ControlChange(113, 0))
-        
+                    if mcu_mode == True:
+                        midi.send(NoteOff(0x54))
+                    else:
+                        if led.value == False:
+                            midi.send(ControlChange(115, 0))
+                        else:
+                            midi.send(ControlChange(113, 0))
+
     """
     Arturia CC messages
     # TODO: Find out which messages an Arturia controller sends when the buttons are pressed: left, right, up, down, select/enter, back, etc.
@@ -360,9 +373,7 @@ while True:
         # If bytes 90 32 00, then print a message on the display
         if bytes == [0x90, 0x32, 0x00]:
             lcd.clear()
-            lcd.putstr("30 92 00 - Reaper, why?")
-            mcu_mode = True
-            led.value = True
+            lcd.putstr("30 92 00, why?")
 
         if debugging_on:
             # If not MIDIUnknownEvent, then print the bytes on the display
@@ -396,10 +407,6 @@ while True:
             # Set the DAW mode into Mackie
             midi.send(SystemExclusive([0xF0, 0x00, 0x20], [0x6B, 0x7F, 0x42, 0x02, 0x00, 0x40, 0x51, 0x00, 0xF7]))
             # midi.send(SystemExclusive([0xF0, 0x00, 0x20], [0x6B, 0x7F, 0x42, 0x02, 0x00, 0x40, 0x51, 0x00]))
-            mcu_mode = True
-            led.value = True
-            lcd.clear()
-            lcd.putstr("MCU mode")
                                   
         # If sysex, then check if it starts with the expected header
         if isinstance(message, SystemExclusive):
@@ -508,6 +515,5 @@ while True:
 
             if bytes == [0xF0, 0x00, 0x00, 0x66, 0x14, 0x08, 0x00, 0xF7]:
                 print("Bye Mackie Control Universal mode")
-                mcu_mode = False
                 lcd.clear()
                 lcd.putstr("Bye MCU mode")
