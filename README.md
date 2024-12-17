@@ -73,9 +73,13 @@ lcd_api.py # https://github.com/dhylands/python_lcd
 
 ## Development in VSCode
 
+Power on the device while button 2 (`<--`) is held down. This will cause the USB mass storage device to be mounted where the Python code can be edited.
+
 * Install CircuitPython v2 extension
 * Press Ctrl-Shift-P, type `circuitpython:` to see the CircuitPython related commands
 * This allows to just save `code.py`, and it will be reloaded on the device and the output will be shown in the Serial Monitor
+
+Power on the device while button 3 (`-->`) is held down. This will cause the USB mass storage device to be mounted where a new CircuitPython version (or entirely different firmware) can be uploaded without needing access to the BOOTSEL pin on the Raspberry Pi Pico.
 
 ## Note
 
@@ -89,7 +93,7 @@ lcd_api.py # https://github.com/dhylands/python_lcd
 - [x] Make it possible to browse categories
 - [x] Make it possible to browse subcategories
 - [x] Make it possible to browse presets using rotary encoder
-- [ ] Fix "Mackie Control Universal" protocol (to get AnalogLab to work in REAPER; this is also what MiniDexed uses)
+- [ ] Fix "Mackie Control Universal" protocol (to get AnalogLab to work in REAPER; this is also what MiniDexed uses) (To enable this mode, power on the device while the rotary encoder button is held down.)
 - [ ] Possibly support graphical OLED, too
 
 ## References
