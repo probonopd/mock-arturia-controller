@@ -407,6 +407,8 @@ while True:
             # Set the DAW mode into Mackie
             midi.send(SystemExclusive([0xF0, 0x00, 0x20], [0x6B, 0x7F, 0x42, 0x02, 0x00, 0x40, 0x51, 0x00, 0xF7]))
             # midi.send(SystemExclusive([0xF0, 0x00, 0x20], [0x6B, 0x7F, 0x42, 0x02, 0x00, 0x40, 0x51, 0x00]))
+            lcd.clear()
+            lcd.putstr("Sent device ID")
                                   
         # If sysex, then check if it starts with the expected header
         if isinstance(message, SystemExclusive):
