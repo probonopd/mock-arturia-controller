@@ -213,7 +213,9 @@ while True:
             print(f"Button {i} pressed")
             if i == 0:
                 # "Category" button
-                if mode == "mcu":
+                if mode == "daw":
+                    pass
+                elif mode == "mcu":
                     # https://github.com/bitwig/bitwig-extensions/blob/da7d70e73cc055475d63ac6c7de17e69f89f4993/src/main/java/com/bitwig/extensions/controllers/arturia/keylab/essential/ArturiaKeylabEssentialControllerExtension.java#L355
                     midi.send(NoteOn(0x65, 127))
                     midi.send(NoteOff(0x65))
@@ -229,7 +231,9 @@ while True:
                         pass
             elif i == 1:
                 # "Preset" button
-                if mode == "mcu":
+                if mode == "daw":
+                    pass
+                elif mode == "mcu":
                     # https://github.com/bitwig/bitwig-extensions/blob/da7d70e73cc055475d63ac6c7de17e69f89f4993/src/main/java/com/bitwig/extensions/controllers/arturia/keylab/essential/ArturiaKeylabEssentialControllerExtension.java#L366
                     midi.send(NoteOn(0x64, 127))
                     midi.send(NoteOff(0x64))
@@ -242,7 +246,9 @@ while True:
             elif i == 2:
                 # "<-" button
                 # Previous preset
-                if mode == "mcu":
+                if mode == "daw":
+                    pass
+                elif mode == "mcu":
                     # https://github.com/bitwig/bitwig-extensions/blob/da7d70e73cc055475d63ac6c7de17e69f89f4993/src/main/java/com/bitwig/extensions/controllers/arturia/keylab/essential/ArturiaKeylabEssentialControllerExtension.java#L323
                     midi.send(NoteOn(0x62, 127))
                     midi.send(NoteOff(0x62))
@@ -251,7 +257,9 @@ while True:
             elif i == 3:
                 # "->"" button
                 # Next preset
-                if mode == "mcu":
+                if mode == "daw":
+                    pass
+                elif mode == "mcu":
                     # https://github.com/bitwig/bitwig-extensions/blob/da7d70e73cc055475d63ac6c7de17e69f89f4993/src/main/java/com/bitwig/extensions/controllers/arturia/keylab/essential/ArturiaKeylabEssentialControllerExtension.java#L339
                     midi.send(NoteOn(0x63, 127))
                 else:
@@ -282,13 +290,25 @@ while True:
                 buttons_pressed[i] = False
                 print(f"Button {i} released")
                 if i == 0:
-                    midi.send(ControlChange(117, 0))
+                    if mode == "daw":
+                        pass
+                    else:
+                        midi.send(ControlChange(117, 0))
                 elif i == 1:
-                    midi.send(ControlChange(28, 0))
+                    if mode == "daw":
+                        pass
+                    else:
+                        midi.send(ControlChange(28, 0))
                 elif i == 2:
-                    midi.send(ControlChange(29, 0))
+                    if mode == "daw":
+                        pass
+                    else:
+                        midi.send(ControlChange(29, 0))
                 elif i == 3:
-                    midi.send(ControlChange(116, 0))
+                    if mode == "daw":
+                        pass
+                    else:
+                        midi.send(ControlChange(116, 0))
                 elif i == 4:
                     if mode == "daw":
                         midi.send(ControlChange(118, 0)) # To end the "Click" action
@@ -474,6 +494,31 @@ while True:
                     S2_string = S2_string.replace('*', chr(0))
                 else:
                     print("No heart")
+                # If we are emulating Minilab3, then we need to remove extraneous spaces to win ideally 2 characters in each line
+                # We check if there are multiple spaces adjacent to each other.
+                # If there are more than 2 spaces, then we remove 2 of them. If there is only more than 1 space, then we remove 1 of them.
+                if product == "Minilab3":
+                    if S1_string.count('   ') > 0:
+                        # Find the offset of the first occurrence of 3 spaces
+                        offset = S1_string.find('   ')
+                        # Remove 2 spaces
+                        S1_string = S1_string[:offset + 1] + S1_string[offset + 3:]
+                    elif S1_string.count('  ') > 0:
+                        # Find the offset of the first occurrence of 2 spaces
+                        offset = S1_string.find('  ')
+                        # Remove 1 space
+                        S1_string = S1_string[:offset + 1] + S1_string[offset + 2:]
+                    if S2_string is not None:
+                        if S2_string.count('   ') > 0:
+                            # Find the offset of the first occurrence of 3 spaces
+                            offset = S2_string.find('   ')
+                            # Remove 2 spaces
+                            S2_string = S2_string[:offset + 1] + S2_string[offset + 3:]
+                        elif S2_string.count('  ') > 0:
+                            # Find the offset of the first occurrence of 2 spaces
+                            offset = S2_string.find('  ')
+                            # Remove 1 space
+                            S2_string = S2_string[:offset + 1] + S2_string[offset + 2:]
                 lcd.clear()
                 lcd.move_to(0, 0)
                 lcd.putstr(S1_string)
