@@ -166,35 +166,35 @@ while True:
         # If the new position is greater than the last position, then the encoder was turned clockwise
         if last_position is not None and position > last_position:
             print("Clockwise")
-            if mcu_mode == True:
-                midi.send(ControlChange(0x3C , 1))
+            if product == "Minilab3":
+                midi.send(ControlChange(114, 64))
+                midi.send(ControlChange(114, 65))
             else:
-                if led.value == False:
-                    if product == "Minilab3":
-                        midi.send(ControlChange(144, 64))
-                        midi.send(ControlChange(144, 65))
-                    else:
+                if mcu_mode == True:
+                    midi.send(ControlChange(0x3C , 1))
+                else:
+                    if led.value == False:
                         midi.send(ControlChange(114, 64))
                         midi.send(ControlChange(114, 65))
-                else:
-                    midi.send(ControlChange(112, 64))
-                    midi.send(ControlChange(112, 65))
+                    else:
+                        midi.send(ControlChange(112, 64))
+                        midi.send(ControlChange(112, 65))
         # If the new position is less than the last position, then the encoder was turned counterclockwise
         elif last_position is not None and position < last_position:
             print("Counterclockwise")
-            if mcu_mode == True:
-                midi.send(ControlChange(0x3C , 127))
+            if product == "Minilab3":
+                midi.send(ControlChange(114, 64))
+                midi.send(ControlChange(114, 63))
             else:
-                if led.value == False:
-                    if product == "Minilab3":
-                        midi.send(ControlChange(144, 64))
-                        midi.send(ControlChange(144, 62))
-                    else:
+                if mcu_mode == True:
+                    midi.send(ControlChange(0x3C , 127))
+                else:
+                    if led.value == False:
                         midi.send(ControlChange(114, 64))
                         midi.send(ControlChange(114, 63))
-                else:
-                    midi.send(ControlChange(112, 64))
-                    midi.send(ControlChange(112, 63))
+                    else:
+                        midi.send(ControlChange(112, 64))
+                        midi.send(ControlChange(112, 63))
 
     last_position = position
 
@@ -251,17 +251,20 @@ while True:
                     midi.send(ControlChange(29, 127))
             elif i == 4:
                 # Encoder OK/Enter
-                if mcu_mode == True:
-                    # "MIDI_NOTE_ON 0x54"
-                    midi.send(NoteOn(0x54, 127))
+                if product == "Minilab3":
+                    midi.send(ControlChange(115, 127))
                 else:
-                    if led.value == False:
-                        # We are not in the menu
-                        # NOTE: This also functions as "Like" when long-pressed; hence we also need to send value 0 as soon as the button is released
-                        midi.send(ControlChange(115, 127))
+                    if mcu_mode == True:
+                        # "MIDI_NOTE_ON 0x54"
+                        midi.send(NoteOn(0x54, 127))
                     else:
-                        # We are in the menu
-                        midi.send(ControlChange(113, 127))
+                        if led.value == False:
+                            # We are not in the menu
+                            # NOTE: This also functions as "Like" when long-pressed; hence we also need to send value 0 as soon as the button is released
+                            midi.send(ControlChange(115, 127))
+                        else:
+                            # We are in the menu
+                            midi.send(ControlChange(113, 127))
         
         elif button.value and buttons_pressed[i]:
             time.sleep(debounce_time)
@@ -277,13 +280,16 @@ while True:
                 elif i == 3:
                     midi.send(ControlChange(116, 0))
                 elif i == 4:
-                    if mcu_mode == True:
-                        midi.send(NoteOff(0x54))
+                    if product == "Minilab3":
+                        midi.send(ControlChange(115, 0))
                     else:
-                        if led.value == False:
-                            midi.send(ControlChange(115, 0))
+                        if mcu_mode == True:
+                            midi.send(NoteOff(0x54))
                         else:
-                            midi.send(ControlChange(113, 0))
+                            if led.value == False:
+                                midi.send(ControlChange(115, 0))
+                            else:
+                                midi.send(ControlChange(113, 0))
 
     # Check for incoming MIDI messages
     message = midi.receive()
