@@ -71,6 +71,18 @@ circuitpython_i2c_lcd.py # https://github.com/dhylands/python_lcd
 lcd_api.py # https://github.com/dhylands/python_lcd
 ```
 
+# Configuration
+
+In `boot.py`, you can select which device gets emulated. Known to work are:
+* KeyLab Essential 61 emulation in Arturia mode with AnalogLab standalone and in Cubase
+* Minilab3 emulation in DAW mode with MiniDexed
+
+# Usage
+
+* Power on to use in Arturia mode (e.g., with AnalogLab standalone)
+* Power on while holding down button 0 ("Category") to use in DAW mode (e.g., with MiniDexed - currently works when is set to Minilab3)
+* Power on while holding down the rotary encoder button to use in Mackie Control Universal (MCU) mode (e.g., with REAPER - does not work properly yet)
+
 ## Development in VSCode
 
 Power on the device while button 2 (`<--`) is held down. This will cause the USB mass storage device to be mounted where the Python code can be edited.
