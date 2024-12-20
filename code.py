@@ -25,7 +25,10 @@ from boot import product
 
 debugging_on = False
 
-mcu_mode = False # Mackie Control Universal mode; gets set to True when the sysex inquiry message is received
+mode = "arturia" # Arturia mode, e.g., for AnalogLab
+# Other modes are "daw" and "mcu" (Mackie Control Universal); these are selected by pressing the buttons on the controller
+# at startup
+# TODO: Store in a file which mode was selected last time and start in that mode
 
 # QUESTION: How does the controller know which names the knobs and faders have? Is this information sent from the DAW to the controller?
 # Or does the controller just get the CC number and has to look up the name in a table, depending on the selected instrument?
@@ -126,10 +129,16 @@ for button in buttons:
 # If the encoder button is pressed, then enter MCU mode
 # Note the button is active low, so we check for False
 if buttons[4].value == False:
-    mcu_mode = True
+    mode = "mcu"
     print("MCU mode enabled")
     lcd.clear()
     lcd.putstr("MCU mode enabled")
+# If button 0 is pressed, then enter DAW mode
+if buttons[0].value == False:
+    mode = "daw"
+    print("DAW mode enabled")
+    lcd.clear()
+    lcd.putstr("DAW mode enabled")
 
 while True:
     # Check for Serial commands without blocking
@@ -166,35 +175,33 @@ while True:
         # If the new position is greater than the last position, then the encoder was turned clockwise
         if last_position is not None and position > last_position:
             print("Clockwise")
-            if product == "Minilab3":
-                midi.send(ControlChange(114, 64))
-                midi.send(ControlChange(114, 65))
+            if mode == "daw":
+                midi.send(ControlChange(28, 64))
+                midi.send(ControlChange(28, 65))
             else:
-                if mcu_mode == True:
+                if mode == "mcu":
                     midi.send(ControlChange(0x3C , 1))
+                elif led.value == False:
+                    midi.send(ControlChange(114, 64))
+                    midi.send(ControlChange(114, 65))
                 else:
-                    if led.value == False:
-                        midi.send(ControlChange(114, 64))
-                        midi.send(ControlChange(114, 65))
-                    else:
-                        midi.send(ControlChange(112, 64))
-                        midi.send(ControlChange(112, 65))
+                    midi.send(ControlChange(112, 64))
+                    midi.send(ControlChange(112, 65))
         # If the new position is less than the last position, then the encoder was turned counterclockwise
         elif last_position is not None and position < last_position:
             print("Counterclockwise")
-            if product == "Minilab3":
-                midi.send(ControlChange(114, 64))
-                midi.send(ControlChange(114, 63))
+            if mode == "daw":
+                midi.send(ControlChange(28, 64))
+                midi.send(ControlChange(28, 63))
+            elif mode == "mcu":
+                midi.send(ControlChange(0x3C , 127))
             else:
-                if mcu_mode == True:
-                    midi.send(ControlChange(0x3C , 127))
+                if led.value == False:
+                    midi.send(ControlChange(114, 64))
+                    midi.send(ControlChange(114, 63))
                 else:
-                    if led.value == False:
-                        midi.send(ControlChange(114, 64))
-                        midi.send(ControlChange(114, 63))
-                    else:
-                        midi.send(ControlChange(112, 64))
-                        midi.send(ControlChange(112, 63))
+                    midi.send(ControlChange(112, 64))
+                    midi.send(ControlChange(112, 63))
 
     last_position = position
 
@@ -206,7 +213,7 @@ while True:
             print(f"Button {i} pressed")
             if i == 0:
                 # "Category" button
-                if mcu_mode == True:
+                if mode == "mcu":
                     # https://github.com/bitwig/bitwig-extensions/blob/da7d70e73cc055475d63ac6c7de17e69f89f4993/src/main/java/com/bitwig/extensions/controllers/arturia/keylab/essential/ArturiaKeylabEssentialControllerExtension.java#L355
                     midi.send(NoteOn(0x65, 127))
                     midi.send(NoteOff(0x65))
@@ -222,7 +229,7 @@ while True:
                         pass
             elif i == 1:
                 # "Preset" button
-                if mcu_mode == True:
+                if mode == "mcu":
                     # https://github.com/bitwig/bitwig-extensions/blob/da7d70e73cc055475d63ac6c7de17e69f89f4993/src/main/java/com/bitwig/extensions/controllers/arturia/keylab/essential/ArturiaKeylabEssentialControllerExtension.java#L366
                     midi.send(NoteOn(0x64, 127))
                     midi.send(NoteOff(0x64))
@@ -235,7 +242,7 @@ while True:
             elif i == 2:
                 # "<-" button
                 # Previous preset
-                if mcu_mode == True:
+                if mode == "mcu":
                     # https://github.com/bitwig/bitwig-extensions/blob/da7d70e73cc055475d63ac6c7de17e69f89f4993/src/main/java/com/bitwig/extensions/controllers/arturia/keylab/essential/ArturiaKeylabEssentialControllerExtension.java#L323
                     midi.send(NoteOn(0x62, 127))
                     midi.send(NoteOff(0x62))
@@ -244,27 +251,30 @@ while True:
             elif i == 3:
                 # "->"" button
                 # Next preset
-                if mcu_mode == True:
+                if mode == "mcu":
                     # https://github.com/bitwig/bitwig-extensions/blob/da7d70e73cc055475d63ac6c7de17e69f89f4993/src/main/java/com/bitwig/extensions/controllers/arturia/keylab/essential/ArturiaKeylabEssentialControllerExtension.java#L339
                     midi.send(NoteOn(0x63, 127))
                 else:
                     midi.send(ControlChange(29, 127))
             elif i == 4:
                 # Encoder OK/Enter
-                if product == "Minilab3":
-                    midi.send(ControlChange(115, 127))
-                else:
-                    if mcu_mode == True:
-                        # "MIDI_NOTE_ON 0x54"
-                        midi.send(NoteOn(0x54, 127))
+                if mode == "daw":
+                    # If buton 0 (used as Shift in DAW mode) is not pressed
+                    if buttons[0].value:
+                        midi.send(ControlChange(118, 127)) # Click
                     else:
-                        if led.value == False:
-                            # We are not in the menu
-                            # NOTE: This also functions as "Like" when long-pressed; hence we also need to send value 0 as soon as the button is released
-                            midi.send(ControlChange(115, 127))
-                        else:
-                            # We are in the menu
-                            midi.send(ControlChange(113, 127))
+                        midi.send(ControlChange(119, 127)) # Shft + Click
+                elif mode == "mcu":
+                    # "MIDI_NOTE_ON 0x54"
+                    midi.send(NoteOn(0x54, 127))
+                else:
+                    if led.value == False:
+                        # We are not in the menu
+                        # NOTE: This also functions as "Like" when long-pressed; hence we also need to send value 0 as soon as the button is released
+                        midi.send(ControlChange(115, 127))
+                    else:
+                        # We are in the menu
+                        midi.send(ControlChange(113, 127))
         
         elif button.value and buttons_pressed[i]:
             time.sleep(debounce_time)
@@ -280,16 +290,16 @@ while True:
                 elif i == 3:
                     midi.send(ControlChange(116, 0))
                 elif i == 4:
-                    if product == "Minilab3":
-                        midi.send(ControlChange(115, 0))
+                    if mode == "daw":
+                        midi.send(ControlChange(118, 0)) # To end the "Click" action
+                        midi.send(ControlChange(119, 0)) # To end the "Shft + Click" action
+                    elif mode == "mcu":
+                        midi.send(NoteOff(0x54))
                     else:
-                        if mcu_mode == True:
-                            midi.send(NoteOff(0x54))
+                        if led.value == False:
+                            midi.send(ControlChange(115, 0))
                         else:
-                            if led.value == False:
-                                midi.send(ControlChange(115, 0))
-                            else:
-                                midi.send(ControlChange(113, 0))
+                            midi.send(ControlChange(113, 0))
 
     # Check for incoming MIDI messages
     message = midi.receive()
@@ -374,13 +384,9 @@ while True:
                 lcd.putstr("FIXME: device ID")
                 lcd.move_to(0, 1)
                 lcd.putstr("for " + product)
-            # Set the DAW mode into Mackie
+            # Set the DAW mode into Mackie???
             midi.send(SystemExclusive([0x00, 0x20, 0x6B], [0x7F, 0x42, 0x02, 0x00, 0x40, 0x51, 0x00]))
-            mcu_mode = True
-            print("MCU mode enabled")
-            lcd.clear()
-            lcd.putstr("MCU mode enabled")
-                                  
+
         # If sysex, then check if it starts with the expected header
         if isinstance(message, SystemExclusive):
             if bytes[:6] == [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42]:
