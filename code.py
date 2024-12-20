@@ -104,22 +104,6 @@ print("MIDI input channel:", midi.in_channel)
 print("MIDI output port:", usb_midi.ports[1])
 print("MIDI output channel:", midi.out_channel)
 
-"""
-Sysex message format used by Arturia KeyLab Essential 61 with AnalogLab to write to the display:
-F0               # sysex header
-00 20 6B 7F 42   # Arturia header
-04 00 60         # set text
-01 S1 00         # S1 = Instrument (e.g. 'ARP 2600')
-02 S2 00         # S2 = Name (e.g. 'Bloody Swing')
-03 S3 00         # S3 = Type (e.g. 'Noise')
-04 S4 00         # S4 = Whether to display a heart (if 46 20, then display a heart; if nonexistent, then do not display a heart) - OPTIONAL
-F7               # sysex footer
-
-Example with heart:
-F0 00 20 6B 7F 42 04 00 60 01 41 52 50 20 32 36 30 30 00 02 2A 42 6C 6F 6F 64 79 20 53 77 69 6E 67 00 03 4E 6F 69 73 65 00 04 46 20 00 F7
-Example without heart:
-F0 00 20 6B 7F 42 04 00 60 01 41 52 50 20 32 36 30 30 00 02 2A 42 6C 6F 6F 64 79 20 53 77 69 6E 67 00 03 4E 6F 69 73 65 00 04 00 F7
-"""
 buttons_pressed = [False, False, False, False, False]
 
 debounce_time = 0.05  # 50 ms debounce time
@@ -356,6 +340,8 @@ while True:
             Then it sets the DAW mode into mackie with 0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x02, 0x00, 0x40, 0x51, 0x00, 0xF7"""
 
             # Respond with a matching device ID
+            # NOTE: The first and last bytes are the sysex header and footer and must not be included as they are added automatically by the MIDI library
+            # The last 4 bytes are the firmware version; how exactly to convert from XX.YY.ZZZZ to 0xXX 0xYY 0xZZ 0xZZ?
             if product == "Minilab3":
                 midi.send(SystemExclusive([0x7E, 0x7F, 0x06], [0x02, 0x00, 0x20, 0x6B, 0x02, 0x00, 0x04, 0x04, 0x01, 0x01, 0x01, 0x01]))
             elif product == "Arturia KeyLab Essential 49":
@@ -393,11 +379,26 @@ while True:
         if isinstance(message, SystemExclusive):
             if bytes[:6] == [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42]:
                 print("Arturia sysex recognized")
-            # 0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x04, 0x00, 0x60 on the KeyLab Essential 61 (16x2)
-            # 0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x04, 0x02, 0x60 on the Keylab3 (graphical; supports more than 16 characters?)
-            # There might be other variations
-            # Hence checking only the first 7 bytes for now
-            if bytes[:7] == [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x04]:
+
+            """
+            Sysex message format used by Arturia KeyLab Essential 61 with AnalogLab to write to the display:
+            F0               # sysex header
+            00 20 6B 7F 42   # Arturia header
+            04 ?? 60         # set text (?? can be 00 for KeyLab Essential or 02 for Minilab3 and possibly other values)
+            01 S1 00         # S1 = Instrument (e.g. 'ARP 2600')
+            02 S2 00         # S2 = Name (e.g. 'Bloody Swing')
+            03 S3 00         # S3 = Type (e.g. 'Noise')
+            04 S4 00         # S4 = Whether to display a heart (if 46 20, then display a heart; if nonexistent, then do not display a heart) - OPTIONAL
+            F7               # sysex footer
+
+            Example with heart:
+            F0 00 20 6B 7F 42 04 00 60 01 41 52 50 20 32 36 30 30 00 02 2A 42 6C 6F 6F 64 79 20 53 77 69 6E 67 00 03 4E 6F 69 73 65 00 04 46 20 00 F7
+            Example without heart:
+            F0 00 20 6B 7F 42 04 00 60 01 41 52 50 20 32 36 30 30 00 02 2A 42 6C 6F 6F 64 79 20 53 77 69 6E 67 00 03 4E 6F 69 73 65 00 04 00 F7
+            """
+
+            # Hence checking only the first 7 bytes for now and the 9th byte
+            if bytes[:7] == [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x04] and bytes[8] == 0x60:
                 print("Set text sysex recognized")
                 #try:
                 # Find the indices of the bytes
