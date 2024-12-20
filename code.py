@@ -21,6 +21,8 @@ from adafruit_midi.system_exclusive import SystemExclusive
 from adafruit_midi.timing_clock import TimingClock
 from adafruit_midi.midi_message import MIDIMessage, MIDIUnknownEvent
 
+from boot import product
+
 debugging_on = False
 
 mcu_mode = False # Mackie Control Universal mode; gets set to True when the sysex inquiry message is received
@@ -29,6 +31,8 @@ mcu_mode = False # Mackie Control Universal mode; gets set to True when the syse
 # Or does the controller just get the CC number and has to look up the name in a table, depending on the selected instrument?
 # If the latter is the case, then this would mean that the controller firmware needs to be updated every time a new instrument is released.
 # This does not seem to be the case. So how does it work?
+
+print(product)
 
 """
 RPi Pico      <-> Peripherals  
@@ -130,19 +134,6 @@ potential_cc = [110, 111, 112, 113, 114, 115, 116, 117]
 potential_values = [63, 64]
 # Make a list of all combinations of potential CCs and values
 combinations = [(cc, value) for cc in potential_cc for value in potential_values]
-# 28 63 shows menu
-# 28 64 shows menu
-# 29 63 shows next menu
-# 29 64 shows next menu
-# 30 63 shows prev menu
-# 30 64 nothing
-# 85 64 shows "Unassigned" for a while
-# 112 63 shwos menu
-# 112 64 nothing
-# 113 63 shows menu
-# 113 64 shows liked, and goes out of menu
-# Somewhere there the magic happens: we go into the submenu of e.g., Instruments and can select the instrument there
-# 116 63 nothing
 #####################################################
 
 print("Checking for button presses...")
@@ -195,8 +186,12 @@ while True:
                 midi.send(ControlChange(0x3C , 1))
             else:
                 if led.value == False:
-                    midi.send(ControlChange(114, 64))
-                    midi.send(ControlChange(114, 65))
+                    if product == "Minilab3":
+                        midi.send(ControlChange(144, 64))
+                        midi.send(ControlChange(144, 65))
+                    else:
+                        midi.send(ControlChange(114, 64))
+                        midi.send(ControlChange(114, 65))
                 else:
                     midi.send(ControlChange(112, 64))
                     midi.send(ControlChange(112, 65))
@@ -207,8 +202,12 @@ while True:
                 midi.send(ControlChange(0x3C , 127))
             else:
                 if led.value == False:
-                    midi.send(ControlChange(114, 64))
-                    midi.send(ControlChange(114, 63))
+                    if product == "Minilab3":
+                        midi.send(ControlChange(144, 64))
+                        midi.send(ControlChange(144, 62))
+                    else:
+                        midi.send(ControlChange(114, 64))
+                        midi.send(ControlChange(114, 63))
                 else:
                     midi.send(ControlChange(112, 64))
                     midi.send(ControlChange(112, 63))
@@ -302,50 +301,6 @@ while True:
                         else:
                             midi.send(ControlChange(113, 0))
 
-    """
-    Arturia CC messages
-    # TODO: Find out which messages an Arturia controller sends when the buttons are pressed: left, right, up, down, select/enter, back, etc.
-
-    CC 28 value 0:   Nothing
-    CC 28 value 1...127: Next preset with selecting it (alphabetical)
-
-    CC 29 value 0:   Nothing
-    CC 29 value 1...127: Previous preset with selecting it (alphabetical)
-
-    CC 100 to CC 107: Results in no messages being sent from AnalogLab to the controller
-
-    CC 109 value 127: Nothing?
-    
-    CC 110 value 127: ?
-
-    CC 111 value 127: ?
-
-    CC 112 value 0:   Nothing
-    CC 112 value 1:   Prev preset without selecting it
-    CC 112 value 127: Next preset without selecting it
-
-    CC 113 value 0...63:   OK/Enter
-    CC 113 value 64...127: Like/unlike
-
-    CC 114 value 0:   Nothing
-    CC 114 value 1:   Prev preset without selecting it
-    CC 114 value 127: Next preset without selecting it
-
-    CC 115 value 0...63:   OK/Enter
-    CC 115 value 64...127: Like/unlike toggle
-
-    CC 116 value 0: Does nothing
-    CC 116 value 1...63: Goes out of the menu
-    CC 116 value 64...127: Goes into the Instruments menu, from there can go to Types, My Favorites, Sound Banks using CC 28 and CC 29
-    
-    CC 117 value 0: Does nothing
-    CC 116 value 1...63: ?
-    CC 116 value 64...127: Goes out of the menu
-
-    CC 118 value 0...127 causes a lot of messages to be send from AnalogLab to the controller
-
-    """
-
     # Check for incoming MIDI messages
     message = midi.receive()
     
@@ -400,21 +355,49 @@ while True:
             https://docs.rs/midi-control/latest/midi_control/vendor/arturia/index.html
             Then it sets the DAW mode into mackie with 0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x02, 0x00, 0x40, 0x51, 0x00, 0xF7"""
 
-            # Respond with the Keylab Essential 61 device ID
-            # FIXME: How to properly send a sysex message?
-            midi.send(SystemExclusive([0xF0, 0x7E, 0x7F], [0x06, 0x02, 0x00, 0x20, 0x6B, 0x02, 0x00, 0x05, 0x54, 0x01, 0x01, 0x01, 0x01, 0xF7]))
-            # [0xF0, 0x7E, 0x7F], [0x06, 0x02, 0x00, 0x20, 0x6B, 0x02, 0x00, 0x05, 0x54, 0x01, 0x01, 0x01, 0x01]))
+            # Respond with a matching device ID
+            if product == "Minilab3":
+                midi.send(SystemExclusive([0x7E, 0x7F, 0x06], [0x02, 0x00, 0x20, 0x6B, 0x02, 0x00, 0x04, 0x04, 0x01, 0x01, 0x01, 0x01]))
+            elif product == "Arturia KeyLab Essential 49":
+                midi.send(SystemExclusive([0x7E, 0x7F, 0x06], [0x02, 0x00, 0x20, 0x6B, 0x02, 0x00, 0x05, 0x52, 0x01, 0x01, 0x01, 0x01]))
+            elif product == "Arturia KeyLab Essential 61":
+                midi.send(SystemExclusive([0x7E, 0x7F, 0x06], [0x02, 0x00, 0x20, 0x6B, 0x02, 0x00, 0x05, 0x54, 0x01, 0x01, 0x01, 0x01]))
+            elif product == "Arturia KeyLab Essential 88":
+                midi.send(SystemExclusive([0x7E, 0x7F, 0x06], [0x02, 0x00, 0x20, 0x6B, 0x02, 0x00, 0x05, 0x58, 0x01, 0x01, 0x01, 0x01]))
+            elif product == "Arturia KeyLab mkII 49":
+                midi.send(SystemExclusive([0x7E, 0x7F, 0x06], [0x02, 0x00, 0x20, 0x6B, 0x02, 0x00, 0x05, 0x62, 0x01, 0x01, 0x01, 0x01]))
+            elif product == "Arturia KeyLab mkII 61":
+                midi.send(SystemExclusive([0x7E, 0x7F, 0x06], [0x02, 0x00, 0x20, 0x6B, 0x02, 0x00, 0x05, 0x64, 0x01, 0x01, 0x01, 0x01]))
+            elif product == "Arturia KeyLab mkII 88":
+                midi.send(SystemExclusive([0x7E, 0x7F, 0x06], [0x02, 0x00, 0x20, 0x6B, 0x02, 0x00, 0x05, 0x68, 0x01, 0x01, 0x01, 0x01]))
+            elif product == "Arturia KeyLab Essential 49 mk3": # FIXME: This string is an unconfirmed guess
+                midi.send(SystemExclusive([0x7E, 0x7F, 0x06], [0x02, 0x00, 0x20, 0x6B, 0x02, 0x00, 0x05, 0x72, 0x01, 0x01, 0x01, 0x01]))
+            elif product == "Arturia KeyLab Essential 61 mk3": # FIXME: This string is an unconfirmed guess
+                midi.send(SystemExclusive([0x7E, 0x7F, 0x06], [0x02, 0x00, 0x20, 0x6B, 0x02, 0x00, 0x05, 0x74, 0x01, 0x01, 0x01, 0x01]))
+            elif product == "Arturia KeyLab Essential 88 mk3": # FIXME: This string is an unconfirmed guess
+                midi.send(SystemExclusive([0x7E, 0x7F, 0x06], [0x02, 0x00, 0x20, 0x6B, 0x02, 0x00, 0x05, 0x78, 0x01, 0x01, 0x01, 0x01]))
+            else:
+                print("FIXME: Respond with the correct device ID for", product)
+                lcd.clear()
+                lcd.putstr("FIXME: device ID")
+                lcd.move_to(0, 1)
+                lcd.putstr("for " + product)
             # Set the DAW mode into Mackie
-            midi.send(SystemExclusive([0xF0, 0x00, 0x20], [0x6B, 0x7F, 0x42, 0x02, 0x00, 0x40, 0x51, 0x00, 0xF7]))
-            # midi.send(SystemExclusive([0xF0, 0x00, 0x20], [0x6B, 0x7F, 0x42, 0x02, 0x00, 0x40, 0x51, 0x00]))
+            midi.send(SystemExclusive([0x00, 0x20, 0x6B], [0x7F, 0x42, 0x02, 0x00, 0x40, 0x51, 0x00]))
+            mcu_mode = True
+            print("MCU mode enabled")
             lcd.clear()
-            lcd.putstr("Sent device ID")
+            lcd.putstr("MCU mode enabled")
                                   
         # If sysex, then check if it starts with the expected header
         if isinstance(message, SystemExclusive):
             if bytes[:6] == [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42]:
                 print("Arturia sysex recognized")
-            if bytes[:9] == [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x04, 0x00, 0x60]:
+            # 0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x04, 0x00, 0x60 on the KeyLab Essential 61 (16x2)
+            # 0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x04, 0x02, 0x60 on the Keylab3 (graphical; supports more than 16 characters?)
+            # There might be other variations
+            # Hence checking only the first 7 bytes for now
+            if bytes[:7] == [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x04]:
                 print("Set text sysex recognized")
                 #try:
                 # Find the indices of the bytes
