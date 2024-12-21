@@ -77,22 +77,13 @@ i2c = busio.I2C(board.GP1, board.GP0)
 while i2c.try_lock():
     pass
 
-# Scan for I2C devices
+# Scan for I2C devices and use the first one found for the display
 devices = i2c.scan()
 print("I2C devices found:", [hex(device) for device in devices])
-
-# Try to find LCD at address 0x27 or 0x3f
-lcd = None
-for address in (0x27, 0x3f):
-    try:
-        lcd = I2cLcd(i2c, address, 2, 16)
-        print("LCD found at address", hex(address))
-        break
-    except ValueError:
-        print("No LCD found at address", hex(address))
-# Throw error if no LCD found at either address
-if lcd is None:
-    raise ValueError("No LCD found!")
+try:
+    lcd = I2cLcd(i2c, devices[0], 2, 16)
+except:
+    lcd = None
 
 lcd.clear()
 lcd.backlight = True
