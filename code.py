@@ -356,6 +356,13 @@ while True:
                 lcd.clear()
                 lcd.putstr(' '.join([f"{b:02X}" for b in bytes]))
 
+        # If the string "MiniDexed" is in the received bytes, then switch to DAW mode
+        if not mode == "daw" and "MiniDexed" in ''.join([chr(b) for b in bytes]):
+            mode = "daw"
+            print("DAW mode enabled")
+            lcd.clear()
+            lcd.putstr("DAW mode enabled")
+
         # "Universal Device Request" message
         if bytes == [0xF0, 0x7E, 0x7F, 0x06, 0x01, 0xF7]:
             print("Request for device ID")
