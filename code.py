@@ -425,15 +425,24 @@ while True:
             F0 00 20 6B 7F 42 04 00 60 01 41 52 50 20 32 36 30 30 00 02 2A 42 6C 6F 6F 64 79 20 53 77 69 6E 67 00 03 4E 6F 69 73 65 00 04 46 20 00 F7
             Example without heart:
             F0 00 20 6B 7F 42 04 00 60 01 41 52 50 20 32 36 30 30 00 02 2A 42 6C 6F 6F 64 79 20 53 77 69 6E 67 00 03 4E 6F 69 73 65 00 04 00 F7
+            Example with Minilab3 alternative format:
+            F0 00 20 6B 7F 42 04 02 60 1F 07 01 00 00 01 00 01 Line1 00 02 Line2 00 F7
             """
 
             # Hence checking only the first 7 bytes for now and the 9th byte
             if bytes[:7] == [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x04] and bytes[8] == 0x60:
                 print("Set text sysex recognized")
-                #try:
-                # Find the indices of the bytes
-                first_0x01 = bytes.index(0x01)
-                first_0x00_after_0x01 = bytes.index(0x00, first_0x01)
+                if bytes[9] != [0x01]:
+                    # Minilab3 alternative format
+                    # FIXME: Do this properly
+                    edited_bytes = bytes[:9] + bytes[15:]
+                    bytes = edited_bytes
+                try:
+                    first_0x01 = bytes.index(0x01)
+                    first_0x00_after_0x01 = bytes.index(0x00, first_0x01)
+                except:
+                    first_0x01 = None
+                    first_0x00_after_0x01 = None
                 try:
                     first_0x02_after_0x00 = bytes.index(0x02, first_0x00_after_0x01)
                     first_0x00_after_0x02 = bytes.index(0x00, first_0x02_after_0x00)
@@ -453,7 +462,8 @@ while True:
                     first_0x04_after_0x00 = None
                     first_0x00_after_0x04 = None
                 # Extract the strings
-                S1 = bytes[first_0x01 + 1:first_0x00_after_0x01]
+                if first_0x01 is not None:
+                    S1 = bytes[first_0x01 + 1:first_0x00_after_0x01]
                 if first_0x02_after_0x00 is not None:
                     S2 = bytes[first_0x02_after_0x00 + 1:first_0x00_after_0x02]
                 else:
@@ -480,9 +490,6 @@ while True:
                     S4_string = ''.join([chr(b) for b in S4])
                 else:
                     S4_string = None
-                #print("Instrument:", S1_string)
-                #print("Name:", S2_string)
-                #print("Type:", S3_string)
                 # If the bytes are 46 20, then it is a heart
                 if S4 == [0x46, 0x20]:
                     print("Heart")
