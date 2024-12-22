@@ -432,7 +432,7 @@ while True:
             # Hence checking only the first 7 bytes for now and the 9th byte
             if bytes[:7] == [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x04] and bytes[8] == 0x60:
                 print("Set text sysex recognized")
-                if bytes[9] != [0x01]:
+                if bytes[9] != 0x01:
                     # Minilab3 alternative format
                     # FIXME: Do this properly
                     edited_bytes = bytes[:9] + bytes[15:]
