@@ -133,6 +133,16 @@ def show_macro_display():
     lcd.move_to(0, 1)
     lcd.putstr(str(macro_value))
 
+
+def enter_macro_mode(cc, name):
+    """Activate macro mode for the given CC number and display name."""
+    global macro_mode, macro_cc, macro_name, macro_value
+    macro_mode  = True
+    macro_cc    = cc
+    macro_name  = name
+    macro_value = macro_values.get(cc, 64)
+    show_macro_display()
+
 #####################################################
 # This block is just for testing purposes, shall be removed later
 index = 0
@@ -330,17 +340,9 @@ while True:
                         else:
                             # Arturia mode: dispatch on hold duration
                             if hold_time >= EXTRA_LONG_PRESS_TIME:
-                                macro_mode  = True
-                                macro_cc    = EXTRA_LONG_PRESS_CC[0]
-                                macro_name  = EXTRA_LONG_PRESS_NAMES[0]
-                                macro_value = macro_values.get(macro_cc, 64)
-                                show_macro_display()
+                                enter_macro_mode(EXTRA_LONG_PRESS_CC[0], EXTRA_LONG_PRESS_NAMES[0])
                             elif hold_time >= LONG_PRESS_TIME:
-                                macro_mode  = True
-                                macro_cc    = LONG_PRESS_CC[0]
-                                macro_name  = LONG_PRESS_NAMES[0]
-                                macro_value = macro_values.get(macro_cc, 64)
-                                show_macro_display()
+                                enter_macro_mode(LONG_PRESS_CC[0], LONG_PRESS_NAMES[0])
                             else:
                                 # Short press: fire original Category action then release
                                 if led.value == False:
@@ -354,17 +356,9 @@ while True:
                             pass  # NoteOn+NoteOff already sent in press handler
                         else:
                             if hold_time >= EXTRA_LONG_PRESS_TIME:
-                                macro_mode  = True
-                                macro_cc    = EXTRA_LONG_PRESS_CC[1]
-                                macro_name  = EXTRA_LONG_PRESS_NAMES[1]
-                                macro_value = macro_values.get(macro_cc, 64)
-                                show_macro_display()
+                                enter_macro_mode(EXTRA_LONG_PRESS_CC[1], EXTRA_LONG_PRESS_NAMES[1])
                             elif hold_time >= LONG_PRESS_TIME:
-                                macro_mode  = True
-                                macro_cc    = LONG_PRESS_CC[1]
-                                macro_name  = LONG_PRESS_NAMES[1]
-                                macro_value = macro_values.get(macro_cc, 64)
-                                show_macro_display()
+                                enter_macro_mode(LONG_PRESS_CC[1], LONG_PRESS_NAMES[1])
                             else:
                                 # Short press: fire original Preset action then release
                                 midi.send(ControlChange(117, 127))
@@ -377,17 +371,9 @@ while True:
                             pass  # NoteOn+NoteOff already sent in press handler
                         else:
                             if hold_time >= EXTRA_LONG_PRESS_TIME:
-                                macro_mode  = True
-                                macro_cc    = EXTRA_LONG_PRESS_CC[2]
-                                macro_name  = EXTRA_LONG_PRESS_NAMES[2]
-                                macro_value = macro_values.get(macro_cc, 64)
-                                show_macro_display()
+                                enter_macro_mode(EXTRA_LONG_PRESS_CC[2], EXTRA_LONG_PRESS_NAMES[2])
                             elif hold_time >= LONG_PRESS_TIME:
-                                macro_mode  = True
-                                macro_cc    = LONG_PRESS_CC[2]
-                                macro_name  = LONG_PRESS_NAMES[2]
-                                macro_value = macro_values.get(macro_cc, 64)
-                                show_macro_display()
+                                enter_macro_mode(LONG_PRESS_CC[2], LONG_PRESS_NAMES[2])
                             else:
                                 # Short press: fire original ← action then release
                                 midi.send(ControlChange(28, 127))
@@ -399,17 +385,9 @@ while True:
                             pass  # NoteOn+NoteOff already sent in press handler
                         else:
                             if hold_time >= EXTRA_LONG_PRESS_TIME:
-                                macro_mode  = True
-                                macro_cc    = EXTRA_LONG_PRESS_CC[3]
-                                macro_name  = EXTRA_LONG_PRESS_NAMES[3]
-                                macro_value = macro_values.get(macro_cc, 64)
-                                show_macro_display()
+                                enter_macro_mode(EXTRA_LONG_PRESS_CC[3], EXTRA_LONG_PRESS_NAMES[3])
                             elif hold_time >= LONG_PRESS_TIME:
-                                macro_mode  = True
-                                macro_cc    = LONG_PRESS_CC[3]
-                                macro_name  = LONG_PRESS_NAMES[3]
-                                macro_value = macro_values.get(macro_cc, 64)
-                                show_macro_display()
+                                enter_macro_mode(LONG_PRESS_CC[3], LONG_PRESS_NAMES[3])
                             else:
                                 # Short press: fire original → action then release
                                 midi.send(ControlChange(29, 127))
