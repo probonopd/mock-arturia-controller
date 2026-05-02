@@ -102,6 +102,37 @@ buttons_pressed = [False, False, False, False, False]
 
 debounce_time = 0.05  # 50 ms debounce time
 
+LONG_PRESS_TIME = 0.5        # seconds to trigger long-press macro mode
+EXTRA_LONG_PRESS_TIME = 1.5  # seconds to trigger extra-long-press macro mode
+
+# Per-button press-start timestamps and "already handled" flags
+button_press_time = [0.0, 0.0, 0.0, 0.0, 0.0]
+button_handled = [False, False, False, False, False]
+
+# Long-press CC assignments (buttons 0–3)
+LONG_PRESS_CC    = [74,            71,       76,     77]
+LONG_PRESS_NAMES = ["Brightness", "Timbre", "Time", "Movement"]
+
+# Extra-long-press CC assignments (buttons 0–3)
+EXTRA_LONG_PRESS_CC    = [93,               18,            19,            16]
+EXTRA_LONG_PRESS_NAMES = ["FX A Dry/Wet", "FX B Dry/Wet", "Delay Level", "Reverb Level"]
+
+# Macro mode state
+macro_mode  = False  # True while displaying and editing a macro CC
+macro_cc    = None   # CC number being controlled
+macro_name  = None   # display name
+macro_value = 64     # current value (0–127)
+macro_values = {}    # remember last value per CC across activations
+
+
+def show_macro_display():
+    """Refresh LCD to show the active macro name (row 0) and value (row 1)."""
+    lcd.clear()
+    lcd.move_to(0, 0)
+    lcd.putstr(macro_name[:16])
+    lcd.move_to(0, 1)
+    lcd.putstr(str(macro_value))
+
 #####################################################
 # This block is just for testing purposes, shall be removed later
 index = 0
@@ -163,36 +194,48 @@ while True:
     # Handle rotary encoder
     position = encoder.position
     if last_position is None or position != last_position:
-        # If the new position is greater than the last position, then the encoder was turned clockwise
-        if last_position is not None and position > last_position:
-            print("Clockwise")
-            if mode == "daw":
-                midi.send(ControlChange(28, 64))
-                midi.send(ControlChange(28, 65))
-            else:
-                if mode == "mcu":
-                    midi.send(ControlChange(0x3C , 1))
-                elif led.value == False:
-                    midi.send(ControlChange(114, 64))
-                    midi.send(ControlChange(114, 65))
+        if mode not in ("daw", "mcu") and macro_mode:
+            # In macro mode the encoder adjusts the active macro CC value
+            if last_position is not None and position > last_position:
+                macro_value = min(127, macro_value + 1)
+                midi.send(ControlChange(macro_cc, macro_value))
+                macro_values[macro_cc] = macro_value
+                show_macro_display()
+            elif last_position is not None and position < last_position:
+                macro_value = max(0, macro_value - 1)
+                midi.send(ControlChange(macro_cc, macro_value))
+                macro_values[macro_cc] = macro_value
+                show_macro_display()
+        else:
+            # Normal encoder behaviour
+            if last_position is not None and position > last_position:
+                print("Clockwise")
+                if mode == "daw":
+                    midi.send(ControlChange(28, 64))
+                    midi.send(ControlChange(28, 65))
                 else:
-                    midi.send(ControlChange(112, 64))
-                    midi.send(ControlChange(112, 65))
-        # If the new position is less than the last position, then the encoder was turned counterclockwise
-        elif last_position is not None and position < last_position:
-            print("Counterclockwise")
-            if mode == "daw":
-                midi.send(ControlChange(28, 64))
-                midi.send(ControlChange(28, 63))
-            elif mode == "mcu":
-                midi.send(ControlChange(0x3C, 65))  # 65 = 1 step CCW in MCU relative encoding (bit 6 set, magnitude = 1)
-            else:
-                if led.value == False:
-                    midi.send(ControlChange(114, 64))
-                    midi.send(ControlChange(114, 63))
+                    if mode == "mcu":
+                        midi.send(ControlChange(0x3C , 1))
+                    elif led.value == False:
+                        midi.send(ControlChange(114, 64))
+                        midi.send(ControlChange(114, 65))
+                    else:
+                        midi.send(ControlChange(112, 64))
+                        midi.send(ControlChange(112, 65))
+            elif last_position is not None and position < last_position:
+                print("Counterclockwise")
+                if mode == "daw":
+                    midi.send(ControlChange(28, 64))
+                    midi.send(ControlChange(28, 63))
+                elif mode == "mcu":
+                    midi.send(ControlChange(0x3C, 65))  # 65 = 1 step CCW in MCU relative encoding (bit 6 set, magnitude = 1)
                 else:
-                    midi.send(ControlChange(112, 64))
-                    midi.send(ControlChange(112, 63))
+                    if led.value == False:
+                        midi.send(ControlChange(114, 64))
+                        midi.send(ControlChange(114, 63))
+                    else:
+                        midi.send(ControlChange(112, 64))
+                        midi.send(ControlChange(112, 63))
 
     last_position = position
 
@@ -200,126 +243,189 @@ while True:
     for i, button in enumerate(buttons):
         if not button.value and not buttons_pressed[i]:
             buttons_pressed[i] = True
+            button_press_time[i] = time.monotonic()
+            button_handled[i] = False
             time.sleep(debounce_time)
             print(f"Button {i} pressed")
-            if i == 0:
-                # "Category" button
-                if mode == "daw":
-                    pass
-                elif mode == "mcu":
-                    # https://github.com/bitwig/bitwig-extensions/blob/da7d70e73cc055475d63ac6c7de17e69f89f4993/src/main/java/com/bitwig/extensions/controllers/arturia/keylab/essential/ArturiaKeylabEssentialControllerExtension.java#L355
-                    midi.send(NoteOn(0x65, 127))
-                    midi.send(NoteOff(0x65))
-                    led.value = True
-                else:
-                    if led.value == False:
-                        # We are not in the menu
-                        midi.send(ControlChange(116, 127))
-                        led.value = True
-                    else:
-                        # We are in the menu
-                        # QUESTION: What should actually happen when we are already in the menu and press the "Category" button?
+
+            # In arturia mode any key-down exits macro mode immediately; the
+            # actual button action is skipped (handled flag prevents key-up action too).
+            if mode not in ("daw", "mcu") and macro_mode:
+                macro_mode = False
+                lcd.clear()
+                button_handled[i] = True
+
+            if not button_handled[i]:
+                if i == 0:
+                    # "Category" button
+                    if mode == "daw":
                         pass
-            elif i == 1:
-                # "Preset" button
-                if mode == "daw":
-                    pass
-                elif mode == "mcu":
-                    # https://github.com/bitwig/bitwig-extensions/blob/da7d70e73cc055475d63ac6c7de17e69f89f4993/src/main/java/com/bitwig/extensions/controllers/arturia/keylab/essential/ArturiaKeylabEssentialControllerExtension.java#L366
-                    midi.send(NoteOn(0x64, 127))
-                    midi.send(NoteOff(0x64))
-                    led.value = False
-                else:
-                    # QUESTION: According to https://www.youtube.com/watch?v=ipnTPsDN3t4 3:33, the "Preset" button 
-                    # may not always go into Preset mode, as it is also used to "select a song from the playlist"
-                    midi.send(ControlChange(117, 127))
-                    led.value = False
-            elif i == 2:
-                # "<-" button
-                # Previous preset
-                if mode == "daw":
-                    pass
-                elif mode == "mcu":
-                    # https://github.com/bitwig/bitwig-extensions/blob/da7d70e73cc055475d63ac6c7de17e69f89f4993/src/main/java/com/bitwig/extensions/controllers/arturia/keylab/essential/ArturiaKeylabEssentialControllerExtension.java#L323
-                    midi.send(NoteOn(0x62, 127))
-                    midi.send(NoteOff(0x62))
-                else:
-                    midi.send(ControlChange(28, 127))
-            elif i == 3:
-                # "->"" button
-                # Next preset
-                if mode == "daw":
-                    pass
-                elif mode == "mcu":
-                    # https://github.com/bitwig/bitwig-extensions/blob/da7d70e73cc055475d63ac6c7de17e69f89f4993/src/main/java/com/bitwig/extensions/controllers/arturia/keylab/essential/ArturiaKeylabEssentialControllerExtension.java#L339
-                    midi.send(NoteOn(0x63, 127))
-                    midi.send(NoteOff(0x63))
-                else:
-                    midi.send(ControlChange(29, 127))
-            elif i == 4:
-                # Encoder OK/Enter
-                if mode == "daw":
-                    # If buton 0 (used as Shift in DAW mode) is not pressed
-                    if buttons[0].value:
-                        midi.send(ControlChange(118, 127)) # Click
+                    elif mode == "mcu":
+                        # https://github.com/bitwig/bitwig-extensions/blob/da7d70e73cc055475d63ac6c7de17e69f89f4993/src/main/java/com/bitwig/extensions/controllers/arturia/keylab/essential/ArturiaKeylabEssentialControllerExtension.java#L355
+                        midi.send(NoteOn(0x65, 127))
+                        midi.send(NoteOff(0x65))
+                        led.value = True
+                    # else arturia: deferred to key-up for long-press detection
+                elif i == 1:
+                    # "Preset" button
+                    if mode == "daw":
+                        pass
+                    elif mode == "mcu":
+                        # https://github.com/bitwig/bitwig-extensions/blob/da7d70e73cc055475d63ac6c7de17e69f89f4993/src/main/java/com/bitwig/extensions/controllers/arturia/keylab/essential/ArturiaKeylabEssentialControllerExtension.java#L366
+                        midi.send(NoteOn(0x64, 127))
+                        midi.send(NoteOff(0x64))
+                        led.value = False
+                    # else arturia: deferred to key-up
+                elif i == 2:
+                    # "<-" button
+                    if mode == "daw":
+                        pass
+                    elif mode == "mcu":
+                        # https://github.com/bitwig/bitwig-extensions/blob/da7d70e73cc055475d63ac6c7de17e69f89f4993/src/main/java/com/bitwig/extensions/controllers/arturia/keylab/essential/ArturiaKeylabEssentialControllerExtension.java#L323
+                        midi.send(NoteOn(0x62, 127))
+                        midi.send(NoteOff(0x62))
+                    # else arturia: deferred to key-up
+                elif i == 3:
+                    # "->" button
+                    if mode == "daw":
+                        pass
+                    elif mode == "mcu":
+                        # https://github.com/bitwig/bitwig-extensions/blob/da7d70e73cc055475d63ac6c7de17e69f89f4993/src/main/java/com/bitwig/extensions/controllers/arturia/keylab/essential/ArturiaKeylabEssentialControllerExtension.java#L339
+                        midi.send(NoteOn(0x63, 127))
+                        midi.send(NoteOff(0x63))
+                    # else arturia: deferred to key-up
+                elif i == 4:
+                    # Encoder OK/Enter – fires immediately in all modes
+                    if mode == "daw":
+                        # If button 0 (used as Shift in DAW mode) is not pressed
+                        if buttons[0].value:
+                            midi.send(ControlChange(118, 127)) # Click
+                        else:
+                            midi.send(ControlChange(119, 127)) # Shft + Click
+                    elif mode == "mcu":
+                        # "MIDI_NOTE_ON 0x54"
+                        midi.send(NoteOn(0x54, 127))
                     else:
-                        midi.send(ControlChange(119, 127)) # Shft + Click
-                elif mode == "mcu":
-                    # "MIDI_NOTE_ON 0x54"
-                    midi.send(NoteOn(0x54, 127))
-                else:
-                    if led.value == False:
-                        # We are not in the menu
-                        # NOTE: This also functions as "Like" when long-pressed; hence we also need to send value 0 as soon as the button is released
-                        midi.send(ControlChange(115, 127))
-                    else:
-                        # We are in the menu
-                        midi.send(ControlChange(113, 127))
-        
+                        if led.value == False:
+                            # We are not in the menu
+                            # NOTE: This also functions as "Like" when long-pressed; hence we also need to send value 0 as soon as the button is released
+                            midi.send(ControlChange(115, 127))
+                        else:
+                            # We are in the menu
+                            midi.send(ControlChange(113, 127))
+
         elif button.value and buttons_pressed[i]:
             time.sleep(debounce_time)
             if button.value:
                 buttons_pressed[i] = False
-                print(f"Button {i} released")
-                if i == 0:
-                    if mode == "daw":
-                        pass
-                    elif mode == "mcu":
-                        pass  # NoteOn+NoteOff already sent in press handler
-                    else:
-                        midi.send(ControlChange(117, 0))
-                elif i == 1:
-                    if mode == "daw":
-                        pass
-                    elif mode == "mcu":
-                        pass  # NoteOn+NoteOff already sent in press handler
-                    else:
-                        midi.send(ControlChange(28, 0))
-                elif i == 2:
-                    if mode == "daw":
-                        pass
-                    elif mode == "mcu":
-                        pass  # NoteOn+NoteOff already sent in press handler
-                    else:
-                        midi.send(ControlChange(29, 0))
-                elif i == 3:
-                    if mode == "daw":
-                        pass
-                    elif mode == "mcu":
-                        pass  # NoteOn+NoteOff already sent in press handler
-                    else:
-                        midi.send(ControlChange(116, 0))
-                elif i == 4:
-                    if mode == "daw":
-                        midi.send(ControlChange(118, 0)) # To end the "Click" action
-                        midi.send(ControlChange(119, 0)) # To end the "Shft + Click" action
-                    elif mode == "mcu":
-                        midi.send(NoteOff(0x54))
-                    else:
-                        if led.value == False:
-                            midi.send(ControlChange(115, 0))
+                hold_time = time.monotonic() - button_press_time[i]
+                print(f"Button {i} released (held {hold_time:.3f}s)")
+
+                if not button_handled[i]:
+                    if i == 0:
+                        if mode == "daw":
+                            pass
+                        elif mode == "mcu":
+                            pass  # NoteOn+NoteOff already sent in press handler
                         else:
-                            midi.send(ControlChange(113, 0))
+                            # Arturia mode: dispatch on hold duration
+                            if hold_time >= EXTRA_LONG_PRESS_TIME:
+                                macro_mode  = True
+                                macro_cc    = EXTRA_LONG_PRESS_CC[0]
+                                macro_name  = EXTRA_LONG_PRESS_NAMES[0]
+                                macro_value = macro_values.get(macro_cc, 64)
+                                show_macro_display()
+                            elif hold_time >= LONG_PRESS_TIME:
+                                macro_mode  = True
+                                macro_cc    = LONG_PRESS_CC[0]
+                                macro_name  = LONG_PRESS_NAMES[0]
+                                macro_value = macro_values.get(macro_cc, 64)
+                                show_macro_display()
+                            else:
+                                # Short press: fire original Category action then release
+                                if led.value == False:
+                                    midi.send(ControlChange(116, 127))
+                                    led.value = True
+                                midi.send(ControlChange(117, 0))
+                    elif i == 1:
+                        if mode == "daw":
+                            pass
+                        elif mode == "mcu":
+                            pass  # NoteOn+NoteOff already sent in press handler
+                        else:
+                            if hold_time >= EXTRA_LONG_PRESS_TIME:
+                                macro_mode  = True
+                                macro_cc    = EXTRA_LONG_PRESS_CC[1]
+                                macro_name  = EXTRA_LONG_PRESS_NAMES[1]
+                                macro_value = macro_values.get(macro_cc, 64)
+                                show_macro_display()
+                            elif hold_time >= LONG_PRESS_TIME:
+                                macro_mode  = True
+                                macro_cc    = LONG_PRESS_CC[1]
+                                macro_name  = LONG_PRESS_NAMES[1]
+                                macro_value = macro_values.get(macro_cc, 64)
+                                show_macro_display()
+                            else:
+                                # Short press: fire original Preset action then release
+                                midi.send(ControlChange(117, 127))
+                                led.value = False
+                                midi.send(ControlChange(28, 0))
+                    elif i == 2:
+                        if mode == "daw":
+                            pass
+                        elif mode == "mcu":
+                            pass  # NoteOn+NoteOff already sent in press handler
+                        else:
+                            if hold_time >= EXTRA_LONG_PRESS_TIME:
+                                macro_mode  = True
+                                macro_cc    = EXTRA_LONG_PRESS_CC[2]
+                                macro_name  = EXTRA_LONG_PRESS_NAMES[2]
+                                macro_value = macro_values.get(macro_cc, 64)
+                                show_macro_display()
+                            elif hold_time >= LONG_PRESS_TIME:
+                                macro_mode  = True
+                                macro_cc    = LONG_PRESS_CC[2]
+                                macro_name  = LONG_PRESS_NAMES[2]
+                                macro_value = macro_values.get(macro_cc, 64)
+                                show_macro_display()
+                            else:
+                                # Short press: fire original ← action then release
+                                midi.send(ControlChange(28, 127))
+                                midi.send(ControlChange(29, 0))
+                    elif i == 3:
+                        if mode == "daw":
+                            pass
+                        elif mode == "mcu":
+                            pass  # NoteOn+NoteOff already sent in press handler
+                        else:
+                            if hold_time >= EXTRA_LONG_PRESS_TIME:
+                                macro_mode  = True
+                                macro_cc    = EXTRA_LONG_PRESS_CC[3]
+                                macro_name  = EXTRA_LONG_PRESS_NAMES[3]
+                                macro_value = macro_values.get(macro_cc, 64)
+                                show_macro_display()
+                            elif hold_time >= LONG_PRESS_TIME:
+                                macro_mode  = True
+                                macro_cc    = LONG_PRESS_CC[3]
+                                macro_name  = LONG_PRESS_NAMES[3]
+                                macro_value = macro_values.get(macro_cc, 64)
+                                show_macro_display()
+                            else:
+                                # Short press: fire original → action then release
+                                midi.send(ControlChange(29, 127))
+                                midi.send(ControlChange(116, 0))
+                    elif i == 4:
+                        if mode == "daw":
+                            midi.send(ControlChange(118, 0)) # To end the "Click" action
+                            midi.send(ControlChange(119, 0)) # To end the "Shft + Click" action
+                        elif mode == "mcu":
+                            midi.send(NoteOff(0x54))
+                        else:
+                            if led.value == False:
+                                midi.send(ControlChange(115, 0))
+                            else:
+                                midi.send(ControlChange(113, 0))
+                button_handled[i] = False
 
     # Check for incoming MIDI messages
     message = midi.receive()
