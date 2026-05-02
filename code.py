@@ -185,7 +185,7 @@ while True:
                 midi.send(ControlChange(28, 64))
                 midi.send(ControlChange(28, 63))
             elif mode == "mcu":
-                midi.send(ControlChange(0x3C , 127))
+                midi.send(ControlChange(0x3C, 65))  # 65 = 1 step CCW in MCU relative encoding (bit 6 set, magnitude = 1)
             else:
                 if led.value == False:
                     midi.send(ControlChange(114, 64))
@@ -253,6 +253,7 @@ while True:
                 elif mode == "mcu":
                     # https://github.com/bitwig/bitwig-extensions/blob/da7d70e73cc055475d63ac6c7de17e69f89f4993/src/main/java/com/bitwig/extensions/controllers/arturia/keylab/essential/ArturiaKeylabEssentialControllerExtension.java#L339
                     midi.send(NoteOn(0x63, 127))
+                    midi.send(NoteOff(0x63))
                 else:
                     midi.send(ControlChange(29, 127))
             elif i == 4:
@@ -283,21 +284,29 @@ while True:
                 if i == 0:
                     if mode == "daw":
                         pass
+                    elif mode == "mcu":
+                        pass  # NoteOn+NoteOff already sent in press handler
                     else:
                         midi.send(ControlChange(117, 0))
                 elif i == 1:
                     if mode == "daw":
                         pass
+                    elif mode == "mcu":
+                        pass  # NoteOn+NoteOff already sent in press handler
                     else:
                         midi.send(ControlChange(28, 0))
                 elif i == 2:
                     if mode == "daw":
                         pass
+                    elif mode == "mcu":
+                        pass  # NoteOn+NoteOff already sent in press handler
                     else:
                         midi.send(ControlChange(29, 0))
                 elif i == 3:
                     if mode == "daw":
                         pass
+                    elif mode == "mcu":
+                        pass  # NoteOn+NoteOff already sent in press handler
                     else:
                         midi.send(ControlChange(116, 0))
                 elif i == 4:
@@ -565,3 +574,39 @@ while True:
                 print("Bye Mackie Control Universal mode")
                 lcd.clear()
                 lcd.putstr("Bye MCU mode")
+
+            # MCU Host Connection Query (sent by REAPER on connection)
+            # Respond with a 7-byte serial number and 4-byte challenge
+            # F0 00 00 66 14 00 F7
+            if bytes == [0xF0, 0x00, 0x00, 0x66, 0x14, 0x00, 0xF7]:
+                print("MCU Host Connection Query received")
+                lcd.clear()
+                lcd.putstr("MCU connected")
+                # Respond with serial number (7 bytes) and challenge code (4 bytes)
+                # Serial: arbitrary 7 bytes (0x00 * 7), challenge: arbitrary 4 bytes
+                serial = [0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06]
+                challenge = [0x01, 0x02, 0x03, 0x04]
+                midi.send(SystemExclusive([0x00, 0x00, 0x66], [0x14, 0x1C] + serial + challenge))
+
+            # MCU Host Connection Reply (sent by REAPER after receiving challenge)
+            # F0 00 00 66 14 02 [4-byte response] F7 - accept unconditionally for mock
+            if bytes[:6] == [0xF0, 0x00, 0x00, 0x66, 0x14, 0x02] and bytes[-1] == 0xF7:
+                print("MCU Host Connection Reply received, confirming connection")
+                # Confirm connection: F0 00 00 66 14 1B F7
+                midi.send(SystemExclusive([0x00, 0x00, 0x66], [0x14, 0x1B]))
+
+            # MCU LCD Segment Display update
+            # F0 00 00 66 14 12 [offset 0-111] [text bytes...] F7
+            # offset 0-55 = upper row (chars 0-55 of 56-char wide display)
+            # offset 56-111 = lower row
+            if bytes[:6] == [0xF0, 0x00, 0x00, 0x66, 0x14, 0x12] and bytes[-1] == 0xF7:
+                offset = bytes[6]
+                text_bytes = bytes[7:-1]
+                text = ''.join([chr(b) if 0x20 <= b < 0x7F else ' ' for b in text_bytes])
+                print(f"MCU LCD update offset={offset}: '{text}'")
+                if offset < 56:
+                    lcd.move_to(0, 0)
+                    lcd.putstr(text[:16])
+                else:
+                    lcd.move_to(0, 1)
+                    lcd.putstr(text[:16])
