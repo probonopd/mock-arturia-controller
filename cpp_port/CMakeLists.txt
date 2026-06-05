@@ -1,15 +1,15 @@
 cmake_minimum_required(VERSION 3.13)
 
-project(mock_arturia_controller_cpp C CXX ASM)
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 17)
-
 option(ENABLE_TESTS "Build host-side tests for the sysex parser" OFF)
 
 set(EMULATED_MODEL "MINILAB3" CACHE STRING "Which Arturia controller model to emulate")
 set_property(CACHE EMULATED_MODEL PROPERTY STRINGS MINILAB3 KEYLAB_ESSENTIAL_61)
 
 if(ENABLE_TESTS)
+  project(mock_arturia_controller_cpp_tests C CXX)
+  set(CMAKE_C_STANDARD 11)
+  set(CMAKE_CXX_STANDARD 17)
+
   add_executable(sysex_display_tests
     tests/sysex_display_test.cpp
     src/sysex_display.cpp
@@ -89,9 +89,13 @@ if(ENABLE_TESTS)
   return()
 endif()
 
-set(BOARD pico_sdk)
 include(${CMAKE_CURRENT_LIST_DIR}/pico_sdk_import.cmake)
 
+project(mock_arturia_controller_cpp C CXX ASM)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
+
+set(BOARD pico_sdk)
 pico_sdk_init()
 
 add_executable(mock_arturia_controller_cpp
