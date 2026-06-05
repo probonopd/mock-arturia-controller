@@ -361,6 +361,14 @@ class ControllerApp {
   }
 
   void apply_display_sysex(const mock_arturia_controller::DisplaySysexPayload& payload) {
+    if (!first_display_sysex_seen_) {
+      first_display_sysex_seen_ = true;
+      lcd_.clear();
+      cached_line1_.clear();
+      cached_line2_.clear();
+      cached_show_heart_ = false;
+    }
+
     std::string line1 = payload.line1;
     std::string line2 = payload.line2;
     if (payload.show_heart) {
@@ -422,6 +430,7 @@ class ControllerApp {
   std::string cached_line2_;
   bool cached_show_heart_ = false;
   bool heart_char_loaded_ = false;
+  bool first_display_sysex_seen_ = false;
   std::array<std::uint8_t, 256> sysex_buffer_{};
   std::size_t sysex_length_ = 0;
   bool sysex_in_progress_ = false;

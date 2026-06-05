@@ -46,11 +46,15 @@ Then export the local SDK path and build:
 
 ```sh
 export PICO_SDK_PATH="$PWD/pico-sdk"
+# For MiniLab 3 protocol
 cmake -S cpp_port -B cpp_port/build -G Ninja -DPICO_BOARD=pico -DEMULATED_MODEL=MINILAB3
 cmake --build cpp_port/build -j4
+# For KeyLab Essential 66 protocol
+cmake -S cpp_port -B cpp_port/build-keylab -G Ninja -DPICO_BOARD=pico -DEMULATED_MODEL=KEYLAB_ESSENTIAL_61
+cmake --build cpp_port/build-keylab -j4
 ```
 
-The UF2 image is written to [cpp_port/build/mock_arturia_controller_cpp.uf2](build/mock_arturia_controller_cpp.uf2).
+The UF2 image is written to `cpp_port/build-*/mock_arturia_controller_cpp.uf2`.
 
 ## Real-device descriptor capture
 
