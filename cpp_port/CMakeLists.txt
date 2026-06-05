@@ -1,8 +1,5 @@
 cmake_minimum_required(VERSION 3.13)
 
-set(BOARD pico_sdk)
-include(${CMAKE_CURRENT_LIST_DIR}/pico_sdk_import.cmake)
-
 project(mock_arturia_controller_cpp C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
