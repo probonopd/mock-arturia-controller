@@ -1,0 +1,38 @@
+name: cpp-port
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository and submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install Pico SDK build toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build gcc-arm-none-eabi
+
+      - name: Build host-side tests
+        env:
+          PICO_SDK_PATH: ${{ github.workspace }}/pico-sdk
+        run: |
+          cmake -S cpp_port -B cpp_port/build-tests -DENABLE_TESTS=ON
+          cmake --build cpp_port/build-tests -j2
+          ctest --test-dir cpp_port/build-tests --output-on-failure
+
+      - name: Build firmware for both supported models
+        env:
+          PICO_SDK_PATH: ${{ github.workspace }}/pico-sdk
+        run: |
+          cmake -S cpp_port -B cpp_port/build-keylab -DEMULATED_MODEL=KEYLAB_ESSENTIAL_61
+          cmake --build cpp_port/build-keylab -j2
+          cmake -S cpp_port -B cpp_port/build-minilab -DEMULATED_MODEL=MINILAB3
+          cmake --build cpp_port/build-minilab -j2

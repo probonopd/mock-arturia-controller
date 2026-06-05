@@ -160,3 +160,18 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+# Local C++ Pico SDK / TinyUSB build outputs
+cpp_port/build-tests/
+cpp_port/build-keylab/
+cpp_port/build-minilab/
+cpp_port/build/
+cpp_port/**/*.uf2
+cpp_port/**/*.bin
+cpp_port/**/*.elf
+cpp_port/**/*.elf.map
+cpp_port/**/*.dis
+cpp_port/**/CMakeCache.txt
+
+real_minilab3_descriptor.txt
+arturiaemu/
