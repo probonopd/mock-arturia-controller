@@ -30,12 +30,14 @@ jobs:
           cmake --build cpp_port/build-tests -j2
           ctest --test-dir cpp_port/build-tests --output-on-failure
 
-      - name: Build firmware for both supported models
+      - name: Build firmware for all supported models
         env:
           PICO_SDK_PATH: ${{ github.workspace }}/pico-sdk
         run: |
           cmake -S cpp_port -B cpp_port/build-keylab -DEMULATED_MODEL=KEYLAB_ESSENTIAL_61
           cmake --build cpp_port/build-keylab -j2
+          cmake -S cpp_port -B cpp_port/build-mk3 -DEMULATED_MODEL=KEYLAB_ESSENTIAL_MK3
+          cmake --build cpp_port/build-mk3 -j2
           cmake -S cpp_port -B cpp_port/build-minilab -DEMULATED_MODEL=MINILAB3
           cmake --build cpp_port/build-minilab -j2
 
@@ -45,6 +47,7 @@ jobs:
           name: mock-arturia-controller-uf2
           path: |
             cpp_port/build-keylab/mock_arturia_controller_cpp.uf2
+            cpp_port/build-mk3/mock_arturia_controller_cpp.uf2
             cpp_port/build-minilab/mock_arturia_controller_cpp.uf2
 
       - name: Publish UF2 files to GitHub Releases
@@ -56,8 +59,10 @@ jobs:
             --title "Release ${GITHUB_REF_NAME}" \
             --notes "Built UF2 firmware artifacts for ${GITHUB_REF_NAME}." \
             cpp_port/build-keylab/mock_arturia_controller_cpp.uf2 \
+            cpp_port/build-mk3/mock_arturia_controller_cpp.uf2 \
             cpp_port/build-minilab/mock_arturia_controller_cpp.uf2 \
             || gh release upload "${GITHUB_REF_NAME}" \
               cpp_port/build-keylab/mock_arturia_controller_cpp.uf2 \
+              cpp_port/build-mk3/mock_arturia_controller_cpp.uf2 \
               cpp_port/build-minilab/mock_arturia_controller_cpp.uf2 \
               --clobber
