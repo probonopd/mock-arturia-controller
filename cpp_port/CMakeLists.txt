@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.13)
 option(ENABLE_TESTS "Build host-side tests for the sysex parser" OFF)
 
 set(EMULATED_MODEL "MINILAB3" CACHE STRING "Which Arturia controller model to emulate")
-set_property(CACHE EMULATED_MODEL PROPERTY STRINGS MINILAB3 KEYLAB_ESSENTIAL_61)
+set_property(CACHE EMULATED_MODEL PROPERTY STRINGS MINILAB3 KEYLAB_ESSENTIAL_61 KEYLAB_ESSENTIAL_MK3)
 
 if(ENABLE_TESTS)
   project(mock_arturia_controller_cpp_tests C CXX)
@@ -31,6 +31,9 @@ if(ENABLE_TESTS)
   )
   add_executable(keylab_output_port_tests
     tests/midi_output_port_test.cpp
+  )
+  add_executable(keylab_mk3_identity_tests
+    tests/keylab_mk3_identity_test.cpp
   )
 
   target_include_directories(sysex_display_tests PRIVATE
@@ -61,6 +64,10 @@ if(ENABLE_TESTS)
     ${CMAKE_CURRENT_LIST_DIR}
     ${CMAKE_CURRENT_LIST_DIR}/src
   )
+  target_include_directories(keylab_mk3_identity_tests PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}
+    ${CMAKE_CURRENT_LIST_DIR}/src
+  )
 
   target_compile_definitions(sysex_display_tests PRIVATE EMULATED_MODEL_MINILAB3=1)
   target_compile_definitions(usb_descriptor_layout_tests PRIVATE EMULATED_MODEL_MINILAB3=1)
@@ -74,9 +81,11 @@ if(ENABLE_TESTS)
   target_compile_options(keylab_usb_identity_tests PRIVATE -Wall -Wextra)
   target_compile_options(keylab_button_mapping_tests PRIVATE -Wall -Wextra)
   target_compile_options(keylab_output_port_tests PRIVATE -Wall -Wextra)
+  target_compile_options(keylab_mk3_identity_tests PRIVATE -Wall -Wextra)
   target_compile_definitions(keylab_usb_identity_tests PRIVATE EMULATED_MODEL_KEYLAB_ESSENTIAL_61=1)
   target_compile_definitions(keylab_button_mapping_tests PRIVATE EMULATED_MODEL_KEYLAB_ESSENTIAL_61=1)
   target_compile_definitions(keylab_output_port_tests PRIVATE EMULATED_MODEL_KEYLAB_ESSENTIAL_61=1)
+  target_compile_definitions(keylab_mk3_identity_tests PRIVATE EMULATED_MODEL_KEYLAB_ESSENTIAL_MK3=1)
 
   enable_testing()
   add_test(NAME sysex_display_tests COMMAND sysex_display_tests)
@@ -86,6 +95,7 @@ if(ENABLE_TESTS)
   add_test(NAME keylab_usb_identity_tests COMMAND keylab_usb_identity_tests)
   add_test(NAME keylab_button_mapping_tests COMMAND keylab_button_mapping_tests)
   add_test(NAME keylab_output_port_tests COMMAND keylab_output_port_tests)
+  add_test(NAME keylab_mk3_identity_tests COMMAND keylab_mk3_identity_tests)
   return()
 endif()
 

@@ -8,12 +8,34 @@
 namespace mock_arturia_controller {
 namespace {
 
-std::size_t find_marker(const std::uint8_t* data, std::size_t size, std::uint8_t marker) {
+std::string extract_string(const std::uint8_t* data, std::size_t size, std::size_t start);
+
+bool looks_like_display_text(const std::string& text) {
+  if (text.size() < 2) {
+    return false;
+  }
+
+  for (const unsigned char value : text) {
+    if (value < 0x20 || value == 0x7F) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+std::size_t find_text_marker(const std::uint8_t* data, std::size_t size, std::uint8_t marker) {
   for (std::size_t index = 0; index + 1 < size; ++index) {
-    if (data[index] == marker) {
+    if (data[index] != marker) {
+      continue;
+    }
+
+    const auto text = extract_string(data, size, index + 1);
+    if (looks_like_display_text(text)) {
       return index;
     }
   }
+
   return size;
 }
 
@@ -22,12 +44,22 @@ std::string extract_string(const std::uint8_t* data, std::size_t size, std::size
     return {};
   }
 
-  const std::size_t end = std::find(data + start, data + size, static_cast<std::uint8_t>(0x00)) - data;
-  if (end <= start) {
-    return {};
+  std::string text;
+  for (std::size_t index = start; index < size; ++index) {
+    const auto value = data[index];
+    if (value == 0x00) {
+      break;
+    }
+
+    // Fresh Mk3 dumps mix the text bytes with metadata bytes (for example 0x04
+    // / 0x06) and only have two physical display lines. Keep the printable
+    // characters and ignore the control bytes so the visible text still renders.
+    if (value >= 0x20 && value < 0x7F) {
+      text.push_back(static_cast<char>(value));
+    }
   }
 
-  return std::string(reinterpret_cast<const char*>(data + start), end - start);
+  return text;
 }
 
 std::string trim_whitespace(std::string text) {
@@ -61,6 +93,25 @@ std::string normalize_for_display(std::string text) {
   return text;
 }
 
+std::string build_bottom_row(const std::vector<std::uint8_t>& bytes) {
+  std::string bottom_row(16, ' ');
+
+  if (std::find(bytes.begin(), bytes.end(), static_cast<std::uint8_t>(0x18)) != bytes.end()) {
+    bottom_row.replace(0, 4, "Types");
+  }
+  if (std::find(bytes.begin(), bytes.end(), static_cast<std::uint8_t>(0x19)) != bytes.end()) {
+    bottom_row[5] = static_cast<char>(0);
+  }
+  if (std::find(bytes.begin(), bytes.end(), static_cast<std::uint8_t>(0x1A)) != bytes.end()) {
+    bottom_row[9] = static_cast<char>(1);
+  }
+  if (std::find(bytes.begin(), bytes.end(), static_cast<std::uint8_t>(0x1B)) != bytes.end()) {
+    bottom_row[13] = static_cast<char>(2);
+  }
+
+  return bottom_row;
+}
+
 }  // namespace
 
 std::optional<DisplaySysexPayload> ParseDisplaySysex(const std::uint8_t* data, std::size_t size) {
@@ -68,44 +119,70 @@ std::optional<DisplaySysexPayload> ParseDisplaySysex(const std::uint8_t* data, s
     return std::nullopt;
   }
 
-  if (data[0] != 0xF0 || data[1] != 0x00 || data[2] != 0x20 ||
-      data[3] != 0x6B || data[4] != 0x7F || data[5] != 0x42) {
+  const bool has_standard_header = data[0] == 0xF0 && data[1] == 0x00 && data[2] == 0x20 &&
+                                   data[3] == 0x6B && data[4] == 0x7F && data[5] == 0x42;
+  const bool has_mk3_dump_header = data[0] == 0xF0 && data[1] == 0x00 && data[2] == 0x20 &&
+                                   data[3] == 0x04 && data[4] == 0x6B && data[5] == 0x7F && data[6] == 0x42;
+
+  if (!has_standard_header && !has_mk3_dump_header) {
     return std::nullopt;
   }
 
-  if (data[6] != 0x04) {
+  const bool has_display_marker = data[6] == 0x04 || (size >= 8 && data[7] == 0x04);
+  if (!has_display_marker) {
     return std::nullopt;
   }
 
   std::vector<std::uint8_t> bytes(data, data + size);
 
-  // Keep the parser focused on the verified Minilab 3 display format.
-  // The extra metadata prefix is not part of the real display text path.
-  if (bytes.size() >= 15 && bytes[8] == 0x60 && bytes[9] != 0x01) {
-    bytes.erase(bytes.begin() + 9, bytes.begin() + 15);
+  // The Mk3 display path uses a small metadata prefix before the actual line text.
+  // Strip that prefix only when it precedes the real text markers.
+  if (bytes.size() >= 15 && bytes[6] == 0x04 && bytes[7] == 0x02 && bytes[8] == 0x60 && bytes[9] == 0x1F) {
+    const std::size_t prefix_end = 9 + 6;
+    if (prefix_end < bytes.size()) {
+      bytes.erase(bytes.begin() + 9, bytes.begin() + prefix_end);
+    }
   }
 
-  const std::size_t marker_1 = find_marker(bytes.data(), bytes.size(), 0x01);
-  const std::size_t marker_2 = marker_1 < bytes.size()
-                                   ? marker_1 + 1 + find_marker(bytes.data() + marker_1 + 1, bytes.size() - marker_1 - 1, 0x02)
-                                   : bytes.size();
-  const std::size_t marker_3 = marker_2 < bytes.size()
-                                   ? marker_2 + 1 + find_marker(bytes.data() + marker_2 + 1, bytes.size() - marker_2 - 1, 0x03)
-                                   : bytes.size();
-  const std::size_t marker_4 = marker_3 < bytes.size()
-                                   ? marker_3 + 1 + find_marker(bytes.data() + marker_3 + 1, bytes.size() - marker_3 - 1, 0x04)
-                                   : bytes.size();
-
-  if (marker_1 >= bytes.size() || marker_2 >= bytes.size()) {
-    return std::nullopt;
-  }
+  const std::size_t marker_1 = find_text_marker(bytes.data(), bytes.size(), 0x01);
+  const std::size_t marker_2 = find_text_marker(bytes.data(), bytes.size(), 0x02);
+  const std::size_t marker_4 = find_text_marker(bytes.data(), bytes.size(), 0x04);
 
   DisplaySysexPayload payload;
-  payload.line1 = normalize_for_display(extract_string(bytes.data(), bytes.size(), marker_1 + 1));
-  payload.line2 = normalize_for_display(extract_string(bytes.data(), bytes.size(), marker_2 + 1));
 
-  payload.show_heart = marker_4 < bytes.size() && marker_4 + 2 < bytes.size() &&
-                       bytes[marker_4 + 1] == 0x46 && bytes[marker_4 + 2] == 0x20;
+  const bool has_heart_symbol = std::find(bytes.begin(), bytes.end(), static_cast<std::uint8_t>(0x19)) != bytes.end();
+  const bool has_arrow_up_symbol = std::find(bytes.begin(), bytes.end(), static_cast<std::uint8_t>(0x1A)) != bytes.end();
+  const bool has_arrow_down_symbol = std::find(bytes.begin(), bytes.end(), static_cast<std::uint8_t>(0x1B)) != bytes.end();
+  const bool has_bottom_row_selector = has_heart_symbol || has_arrow_up_symbol || has_arrow_down_symbol ||
+                                       std::find(bytes.begin(), bytes.end(), static_cast<std::uint8_t>(0x18)) != bytes.end();
+
+  payload.show_heart = has_heart_symbol;
+  payload.show_arrow_up = has_arrow_up_symbol;
+  payload.show_arrow_down = has_arrow_down_symbol;
+  payload.bottom_row_selector_present = has_bottom_row_selector;
+
+  // Use the real display markers for line 1 / line 2 only. The fresh Mk3 dumps
+  // contain metadata bytes that look like text, so falling back to a raw scan of
+  // every byte reintroduces stray fragments such as "kB" into both lines.
+  if (marker_1 < bytes.size()) {
+    payload.line1 = normalize_for_display(extract_string(bytes.data(), bytes.size(), marker_1 + 1));
+  }
+  if (marker_2 < bytes.size()) {
+    payload.line2 = normalize_for_display(extract_string(bytes.data(), bytes.size(), marker_2 + 1));
+  }
+
+  payload.show_heart = payload.show_heart ||
+                       (marker_4 < bytes.size() && marker_4 + 2 < bytes.size() &&
+                        bytes[marker_4 + 1] == 0x46 && bytes[marker_4 + 2] == 0x20);
+
+  if (has_bottom_row_selector) {
+    payload.bottom_row = build_bottom_row(bytes);
+  }
+
+  if (payload.line1.empty() && payload.line2.empty() && has_bottom_row_selector) {
+    payload.line2 = payload.bottom_row;
+    return payload;
+  }
 
   if (payload.line1.empty() && payload.line2.empty()) {
     return std::nullopt;

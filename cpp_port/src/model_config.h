@@ -8,6 +8,7 @@ namespace mock_arturia_controller {
 
 enum class EmulatedModel : std::uint8_t {
   kKeyLabEssential61,
+  kKeyLabEssentialMk3,
   kMinilab3,
 };
 
@@ -62,9 +63,30 @@ static constexpr ModelConfig kModelConfig{
   0x09,
   0x24,
 };
+#elif defined(EMULATED_MODEL_KEYLAB_ESSENTIAL_MK3)
+static constexpr ModelConfig kModelConfig{
+  EmulatedModel::kKeyLabEssentialMk3,
+  0x1c75,
+  0x028c,
+  "Arturia",
+  "KL Essential 61 mk3",
+  "KL Essential 61 mk3 MIDI",
+  {{"KL Essential 61 mk3 ALV", "KL Essential 61 mk3 DINTHRU", "KL Essential 61 mk3 MCU/HUI", "KL Essential 61 mk3 MIDI"}},
+  4,
+  0x72,
+  0x70,
+  0x73,
+  0x71,
+  0x09,
+  0x24,
+};
 #else
-#error "EMULATED_MODEL must be set to MINILAB3 or KEYLAB_ESSENTIAL_61"
+#error "EMULATED_MODEL must be set to MINILAB3, KEYLAB_ESSENTIAL_61, or KEYLAB_ESSENTIAL_MK3"
 #endif
+
+inline constexpr bool IsKeyLabModel(EmulatedModel model) {
+  return model == EmulatedModel::kKeyLabEssential61 || model == EmulatedModel::kKeyLabEssentialMk3;
+}
 
 inline constexpr std::uint8_t MidiOutputPort() {
   return (kModelConfig.midi_port_count == 1) ? 0u : 3u;
@@ -75,6 +97,16 @@ inline constexpr std::uint8_t EncoderClickControlChange(bool shift_held) {
 }
 
 inline constexpr std::uint8_t KeyLabButtonControlChange(std::uint8_t index, bool pressed) {
+  if (kModelConfig.model == EmulatedModel::kKeyLabEssentialMk3) {
+    switch (index) {
+      case 0: return 30;
+      case 1: return 31;
+      case 2: return 86;
+      case 3: return 87;
+      default: return 0;
+    }
+  }
+
   switch (index) {
     case 0: return pressed ? 0x74 : 0x75;
     case 1: return pressed ? 0x75 : 0x1C;
@@ -85,15 +117,27 @@ inline constexpr std::uint8_t KeyLabButtonControlChange(std::uint8_t index, bool
 }
 
 inline constexpr std::uint8_t KeyLabEncoderControlChange(bool menu_active) {
+  if (kModelConfig.model == EmulatedModel::kKeyLabEssentialMk3) {
+    return 114;
+  }
   return menu_active ? 0x70 : 0x72;
 }
 
 inline constexpr std::uint8_t KeyLabEncoderClickControlChange(bool menu_active) {
+  if (kModelConfig.model == EmulatedModel::kKeyLabEssentialMk3) {
+    return 115;
+  }
   return menu_active ? 0x71 : 0x73;
 }
 
 inline constexpr const char* model_name() {
-  return (kModelConfig.model == EmulatedModel::kMinilab3) ? "MINILAB3" : "KEYLAB_ESSENTIAL_61";
+  if (kModelConfig.model == EmulatedModel::kMinilab3) {
+    return "MINILAB3";
+  }
+  if (kModelConfig.model == EmulatedModel::kKeyLabEssentialMk3) {
+    return "KEYLAB_ESSENTIAL_MK3";
+  }
+  return "KEYLAB_ESSENTIAL_61";
 }
 
 }  // namespace mock_arturia_controller

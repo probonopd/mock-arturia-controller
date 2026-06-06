@@ -44,6 +44,13 @@ void Pcf8574Lcd::clear() {
   sleep_ms(2);
 }
 
+void Pcf8574Lcd::clear_row(std::uint8_t row) {
+  set_cursor(0, row);
+  for (std::uint8_t index = 0; index < 16; ++index) {
+    data(' ');
+  }
+}
+
 void Pcf8574Lcd::set_cursor(std::uint8_t col, std::uint8_t row) {
   const std::uint8_t row_offsets[] = {0x00, 0x40, 0x14, 0x54};
   command(static_cast<std::uint8_t>(0x80 | (col + row_offsets[row])));

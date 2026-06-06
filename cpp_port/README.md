@@ -1,14 +1,15 @@
 # C++ Pico SDK port
 
-This directory contains the Raspberry Pi Pico SDK + TinyUSB implementation of the controller firmware for two supported Arturia emulations:
+This directory contains the Raspberry Pi Pico SDK + TinyUSB implementation of the controller firmware for three supported Arturia emulations:
 
 - MiniLab 3
 - KeyLab Essential 61
+- KeyLab Essential Mk3
 
 ## What is here
 
 - [main.cpp](main.cpp) - main loop, button/encoder handling, MIDI I/O, and model-aware controller behavior.
-- [src/model_config.h](src/model_config.h) - compile-time model profile selection for MiniLab 3 and KeyLab Essential 61.
+- [src/model_config.h](src/model_config.h) - compile-time model profile selection for MiniLab 3, KeyLab Essential 61, and KeyLab Essential Mk3.
 - [tests/keylab_button_mapping_test.cpp](tests/keylab_button_mapping_test.cpp) - regression tests for the KeyLab runtime mapping path.
 - [src/pcf8574_lcd.cpp](src/pcf8574_lcd.cpp) - the PCF8574-based LCD driver.
 - [src/sysex_display.cpp](src/sysex_display.cpp) - parsing and normalization of the Arturia display sysex messages.
@@ -16,10 +17,11 @@ This directory contains the Raspberry Pi Pico SDK + TinyUSB implementation of th
 
 ## Model switch
 
-The firmware is compiled with `-DEMULATED_MODEL=MINILAB3` or `-DEMULATED_MODEL=KEYLAB_ESSENTIAL_61`.
+The firmware is compiled with `-DEMULATED_MODEL=MINILAB3`, `-DEMULATED_MODEL=KEYLAB_ESSENTIAL_61`, or `-DEMULATED_MODEL=KEYLAB_ESSENTIAL_MK3`.
 
 - `MINILAB3` uses the full four-port MIDI layout and the original Minilab runtime path.
 - `KEYLAB_ESSENTIAL_61` uses the single MIDI interface that the real KeyLab exposes, and its runtime mapping follows the Python reference for button/encoder behavior.
+- `KEYLAB_ESSENTIAL_MK3` uses the wiki-reported USB ID `0x028c`, the `KL Essential 61 mk3` identity, and the four-port layout (`ALV`, `DINTHRU`, `MCU/HUI`, `MIDI`).
 
 Examples:
 
@@ -30,6 +32,11 @@ cmake --build cpp_port/build -j4
 
 ```sh
 cmake -S cpp_port -B cpp_port/build -DPICO_BOARD=pico -DEMULATED_MODEL=KEYLAB_ESSENTIAL_61
+cmake --build cpp_port/build -j4
+```
+
+```sh
+cmake -S cpp_port -B cpp_port/build -DPICO_BOARD=pico -DEMULATED_MODEL=KEYLAB_ESSENTIAL_MK3
 cmake --build cpp_port/build -j4
 ```
 
@@ -49,9 +56,13 @@ export PICO_SDK_PATH="$PWD/pico-sdk"
 # For MiniLab 3 protocol
 cmake -S cpp_port -B cpp_port/build -G Ninja -DPICO_BOARD=pico -DEMULATED_MODEL=MINILAB3
 cmake --build cpp_port/build -j4
-# For KeyLab Essential 66 protocol
+# For KeyLab Essential 61 protocol
 cmake -S cpp_port -B cpp_port/build-keylab -G Ninja -DPICO_BOARD=pico -DEMULATED_MODEL=KEYLAB_ESSENTIAL_61
 cmake --build cpp_port/build-keylab -j4
+
+# For KeyLab Essential Mk3 protocol
+cmake -S cpp_port -B cpp_port/build-keylab-mk3 -G Ninja -DPICO_BOARD=pico -DEMULATED_MODEL=KEYLAB_ESSENTIAL_MK3
+cmake --build cpp_port/build-keylab-mk3 -j4
 ```
 
 The UF2 image is written to `cpp_port/build-*/mock_arturia_controller_cpp.uf2`.

@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <string>
+#include <string_view>
 
 #include "bsp/board_api.h"
 #include "hardware/gpio.h"
@@ -18,6 +19,19 @@
 
 namespace {
 
+std::string merge_bottom_row(std::string current, std::string_view incoming) {
+  if (current.size() < 16) {
+    current.resize(16, ' ');
+  }
+
+  for (std::size_t index = 0; index < 16 && index < incoming.size(); ++index) {
+    if (incoming[index] != ' ') {
+      current[index] = incoming[index];
+    }
+  }
+
+  return current;
+}
 
 enum class ControllerMode : std::uint8_t {
   kArturia,
@@ -35,6 +49,17 @@ constexpr uint8_t kMidiPortMidi = mock_arturia_controller::MidiOutputPort();
 constexpr uint kI2cSda = 0;
 constexpr uint kI2cScl = 1;
 
+constexpr std::array<std::uint8_t, 8> kHeartGlyph = {
+    0x00, 0x0A, 0x1F, 0x1F, 0x0E, 0x04, 0x00, 0x00,
+};
+
+constexpr std::array<std::uint8_t, 8> kArrowUpGlyph = {
+    0x00, 0x04, 0x0E, 0x15, 0x04, 0x04, 0x04, 0x00,
+};
+
+constexpr std::array<std::uint8_t, 8> kArrowDownGlyph = {
+    0x00, 0x04, 0x04, 0x04, 0x15, 0x0E, 0x04, 0x00,
+};
 
 class ControllerApp {
  public:
@@ -127,7 +152,7 @@ class ControllerApp {
       return;
     }
 
-    if (mock_arturia_controller::kModelConfig.model == mock_arturia_controller::EmulatedModel::kKeyLabEssential61) {
+    if (mock_arturia_controller::IsKeyLabModel(mock_arturia_controller::kModelConfig.model)) {
       handle_keylab_encoder(delta);
       return;
     }
@@ -193,7 +218,7 @@ class ControllerApp {
   void on_button_down(std::uint8_t index) {
     printf("Button %u pressed\n", index);
 
-    if (mock_arturia_controller::kModelConfig.model == mock_arturia_controller::EmulatedModel::kKeyLabEssential61) {
+    if (mock_arturia_controller::IsKeyLabModel(mock_arturia_controller::kModelConfig.model)) {
       on_keylab_button_down(index);
       return;
     }
@@ -217,7 +242,7 @@ class ControllerApp {
   void on_button_up(std::uint8_t index) {
     printf("Button %u released\n", index);
 
-    if (mock_arturia_controller::kModelConfig.model == mock_arturia_controller::EmulatedModel::kKeyLabEssential61) {
+    if (mock_arturia_controller::IsKeyLabModel(mock_arturia_controller::kModelConfig.model)) {
       on_keylab_button_up(index);
       return;
     }
@@ -314,6 +339,24 @@ class ControllerApp {
     }
   }
 
+  bool is_display_sysex(const std::uint8_t* data, std::size_t size) const {
+    return size >= 7 && data[0] == 0xF0 && data[1] == 0x00 && data[2] == 0x20 &&
+           data[3] == 0x6B && data[4] == 0x7F && data[5] == 0x42 && data[6] == 0x04;
+  }
+
+  void reset_display_on_first_sysex() {
+    if (first_display_sysex_seen_) {
+      return;
+    }
+
+    first_display_sysex_seen_ = true;
+    lcd_.clear_row(1);
+    cached_line1_.clear();
+    cached_line2_.clear();
+    cached_show_heart_ = false;
+    bottom_row_buffer_.clear();
+  }
+
   void handle_usb_midi() {
     while (tud_midi_n_available(kMidiPortAlv, 0)) {
       std::array<std::uint8_t, 4> packet{};
@@ -337,6 +380,10 @@ class ControllerApp {
 
         sysex_buffer_[sysex_length_++] = packet[index];
         if (packet[index] == 0xF7) {
+          if (is_display_sysex(sysex_buffer_.data(), sysex_length_)) {
+            reset_display_on_first_sysex();
+          }
+
           const auto parsed = mock_arturia_controller::ParseDisplaySysex(sysex_buffer_.data(), sysex_length_);
           if (parsed) {
             apply_display_sysex(*parsed);
@@ -361,23 +408,48 @@ class ControllerApp {
   }
 
   void apply_display_sysex(const mock_arturia_controller::DisplaySysexPayload& payload) {
-    if (!first_display_sysex_seen_) {
-      first_display_sysex_seen_ = true;
-      lcd_.clear();
-      cached_line1_.clear();
-      cached_line2_.clear();
-      cached_show_heart_ = false;
-    }
-
     std::string line1 = payload.line1;
     std::string line2 = payload.line2;
-    if (payload.show_heart) {
-      if (!heart_char_loaded_) {
-        lcd_.create_char(0, {0x00, 0x0A, 0x1F, 0x1F, 0x0E, 0x04, 0x00, 0x00});
+
+    if (payload.bottom_row_selector_present) {
+      const std::string selector_row = payload.bottom_row.empty() ? line2 : payload.bottom_row;
+      if (bottom_row_buffer_.empty()) {
+        lcd_.clear_row(1);
+      }
+      line2 = merge_bottom_row(bottom_row_buffer_, selector_row);
+      bottom_row_buffer_ = line2;
+    } else {
+      bottom_row_buffer_.clear();
+    }
+
+    const bool needs_heart = payload.show_heart;
+    const bool needs_up = payload.show_arrow_up;
+    const bool needs_down = payload.show_arrow_down;
+
+    if (needs_heart || needs_up || needs_down) {
+      if (!heart_char_loaded_ && needs_heart) {
+        lcd_.create_char(0, kHeartGlyph);
         heart_char_loaded_ = true;
       }
-      std::replace(line1.begin(), line1.end(), '*', '\0');
-      std::replace(line2.begin(), line2.end(), '*', '\0');
+      if (!up_arrow_loaded_ && needs_up) {
+        lcd_.create_char(1, kArrowUpGlyph);
+        up_arrow_loaded_ = true;
+      }
+      if (!down_arrow_loaded_ && needs_down) {
+        lcd_.create_char(2, kArrowDownGlyph);
+        down_arrow_loaded_ = true;
+      }
+
+      for (char& ch : line1) {
+        if (ch == '*') ch = '\0';
+        else if (ch == '^') ch = static_cast<char>(1);
+        else if (ch == 'v' || ch == 'V') ch = static_cast<char>(2);
+      }
+      for (char& ch : line2) {
+        if (ch == '*') ch = '\0';
+        else if (ch == '^') ch = static_cast<char>(1);
+        else if (ch == 'v' || ch == 'V') ch = static_cast<char>(2);
+      }
     }
 
     if (line1 == cached_line1_ && line2 == cached_line2_ && payload.show_heart == cached_show_heart_) {
@@ -428,8 +500,11 @@ class ControllerApp {
   uint32_t last_encoder_step_ms_ = 0;
   std::string cached_line1_;
   std::string cached_line2_;
+  std::string bottom_row_buffer_;
   bool cached_show_heart_ = false;
   bool heart_char_loaded_ = false;
+  bool up_arrow_loaded_ = false;
+  bool down_arrow_loaded_ = false;
   bool first_display_sysex_seen_ = false;
   std::array<std::uint8_t, 256> sysex_buffer_{};
   std::size_t sysex_length_ = 0;

@@ -15,6 +15,7 @@ class Pcf8574Lcd {
 
   bool init();
   void clear();
+  void clear_row(std::uint8_t row);
   void set_cursor(std::uint8_t col, std::uint8_t row);
   void write(std::string_view text);
   void create_char(std::uint8_t index, const std::array<std::uint8_t, 8>& pattern);
