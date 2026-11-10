@@ -4,6 +4,7 @@ import busio
 import usb_midi
 import adafruit_midi
 import digitalio
+import keypad
 import time
 
 from circuitpython_i2c_lcd import I2cLcd # https://github.com/dhylands/python_lcd
@@ -98,9 +99,7 @@ print("MIDI input channel:", midi.in_channel)
 print("MIDI output port:", usb_midi.ports[1])
 print("MIDI output channel:", midi.out_channel)
 
-buttons_pressed = [False, False, False, False, False]
 
-debounce_time = 0.05  # 50 ms debounce time
 
 #####################################################
 # This block is just for testing purposes, shall be removed later
@@ -130,6 +129,16 @@ if buttons[0].value == False:
     print("DAW mode enabled")
     lcd.clear()
     lcd.putstr("DAW mode enabled")
+
+# From here on keypad reads the buttons: it debounces them and queues every press
+# and release in the background, so a short click that falls between two passes
+# of the main loop (which waits on the display and on MIDI) is not lost, and every
+# press gets its release, as on the real unit
+for button in buttons:
+    button.deinit()
+keys = keypad.Keys((board.GP2, board.GP3, board.GP4, board.GP5, board.GP8), value_when_pressed=False, pull=True)
+held = [False, False, False, False, False]
+click_cc = 115
 
 while True:
     # Check for Serial commands without blocking
@@ -197,10 +206,11 @@ while True:
     last_position = position
 
     # Check for button presses, debounce them, and trigger the corresponding actions
-    for i, button in enumerate(buttons):
-        if not button.value and not buttons_pressed[i]:
-            buttons_pressed[i] = True
-            time.sleep(debounce_time)
+    event = keys.events.get()
+    while event:
+        i = event.key_number
+        if event.pressed:
+            held[i] = True
             print(f"Button {i} pressed")
             if i == 0:
                 # "Category" button
@@ -212,14 +222,9 @@ while True:
                     midi.send(NoteOff(0x65))
                     led.value = True
                 else:
-                    if led.value == False:
-                        # We are not in the menu
-                        midi.send(ControlChange(116, 127))
-                        led.value = True
-                    else:
-                        # We are in the menu
-                        # QUESTION: What should actually happen when we are already in the menu and press the "Category" button?
-                        pass
+                    # The real unit sends 127 on every press and 0 on release (momentary), in or out of the menu
+                    midi.send(ControlChange(116, 127))
+                    led.value = True
             elif i == 1:
                 # "Preset" button
                 if mode == "daw":
@@ -253,13 +258,14 @@ while True:
                 elif mode == "mcu":
                     # https://github.com/bitwig/bitwig-extensions/blob/da7d70e73cc055475d63ac6c7de17e69f89f4993/src/main/java/com/bitwig/extensions/controllers/arturia/keylab/essential/ArturiaKeylabEssentialControllerExtension.java#L339
                     midi.send(NoteOn(0x63, 127))
+                    midi.send(NoteOff(0x63))
                 else:
                     midi.send(ControlChange(29, 127))
             elif i == 4:
                 # Encoder OK/Enter
                 if mode == "daw":
                     # If buton 0 (used as Shift in DAW mode) is not pressed
-                    if buttons[0].value:
+                    if not held[0]:
                         midi.send(ControlChange(118, 127)) # Click
                     else:
                         midi.send(ControlChange(119, 127)) # Shft + Click
@@ -270,47 +276,38 @@ while True:
                     if led.value == False:
                         # We are not in the menu
                         # NOTE: This also functions as "Like" when long-pressed; hence we also need to send value 0 as soon as the button is released
-                        midi.send(ControlChange(115, 127))
+                        click_cc = 115
                     else:
                         # We are in the menu
-                        midi.send(ControlChange(113, 127))
+                        click_cc = 113
+                    # The release goes out on the same CC even if Category or Preset changed the menu state meanwhile
+                    midi.send(ControlChange(click_cc, 127))
         
-        elif button.value and buttons_pressed[i]:
-            time.sleep(debounce_time)
-            if button.value:
-                buttons_pressed[i] = False
-                print(f"Button {i} released")
-                if i == 0:
-                    if mode == "daw":
-                        pass
-                    else:
-                        midi.send(ControlChange(117, 0))
-                elif i == 1:
-                    if mode == "daw":
-                        pass
-                    else:
-                        midi.send(ControlChange(28, 0))
-                elif i == 2:
-                    if mode == "daw":
-                        pass
-                    else:
-                        midi.send(ControlChange(29, 0))
-                elif i == 3:
-                    if mode == "daw":
-                        pass
-                    else:
-                        midi.send(ControlChange(116, 0))
-                elif i == 4:
-                    if mode == "daw":
-                        midi.send(ControlChange(118, 0)) # To end the "Click" action
-                        midi.send(ControlChange(119, 0)) # To end the "Shft + Click" action
-                    elif mode == "mcu":
-                        midi.send(NoteOff(0x54))
-                    else:
-                        if led.value == False:
-                            midi.send(ControlChange(115, 0))
-                        else:
-                            midi.send(ControlChange(113, 0))
+        else:
+            held[i] = False
+            print(f"Button {i} released")
+            # Each release goes out on the CC its button's press used: Category 116, Preset 117, <- 28, -> 29
+            if i == 0:
+                if mode not in ("daw", "mcu"):
+                    midi.send(ControlChange(116, 0))
+            elif i == 1:
+                if mode not in ("daw", "mcu"):
+                    midi.send(ControlChange(117, 0))
+            elif i == 2:
+                if mode not in ("daw", "mcu"):
+                    midi.send(ControlChange(28, 0))
+            elif i == 3:
+                if mode not in ("daw", "mcu"):
+                    midi.send(ControlChange(29, 0))
+            elif i == 4:
+                if mode == "daw":
+                    midi.send(ControlChange(118, 0)) # To end the "Click" action
+                    midi.send(ControlChange(119, 0)) # To end the "Shft + Click" action
+                elif mode == "mcu":
+                    midi.send(NoteOff(0x54))
+                else:
+                    midi.send(ControlChange(click_cc, 0))
+        event = keys.events.get()
 
     # Check for incoming MIDI messages
     message = midi.receive()
