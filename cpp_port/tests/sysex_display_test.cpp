@@ -105,5 +105,40 @@ int main() {
   }
 
   std::cout << "sysex display parser ok" << std::endl;
+  // A host that lets go of the display sends two blank lines (KeyLab: 16 spaces
+  // each) or two empty ones (MiniLab 3); a real unit then shows nothing, so the
+  // message must clear the display, not be ignored.
+  std::array<std::uint8_t, 46> blank_keylab{};
+  {
+    std::size_t n = 0;
+    for (std::uint8_t b : {0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x04, 0x00, 0x60, 0x01}) {
+      blank_keylab[n++] = b;
+    }
+    for (int i = 0; i < 16; ++i) {
+      blank_keylab[n++] = ' ';
+    }
+    blank_keylab[n++] = 0x00;
+    blank_keylab[n++] = 0x02;
+    for (int i = 0; i < 16; ++i) {
+      blank_keylab[n++] = ' ';
+    }
+    blank_keylab[n++] = 0x00;
+    blank_keylab[n++] = 0xF7;
+  }
+  const auto blank = ParseDisplaySysex(blank_keylab.data(), blank_keylab.size());
+  if (!blank.has_value() || !blank->line1.empty() || !blank->line2.empty()) {
+    std::cerr << "Expected two blank lines to clear the display" << std::endl;
+    return 10;
+  }
+
+  constexpr std::uint8_t kEmptyMinilab[] = {
+      0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x04, 0x02, 0x60, 0x01, 0x00, 0x02, 0x00, 0xF7,
+  };
+  const auto empty = ParseDisplaySysex(kEmptyMinilab, sizeof(kEmptyMinilab));
+  if (!empty.has_value() || !empty->line1.empty() || !empty->line2.empty()) {
+    std::cerr << "Expected two empty lines to clear the display" << std::endl;
+    return 11;
+  }
+
   return 0;
 }

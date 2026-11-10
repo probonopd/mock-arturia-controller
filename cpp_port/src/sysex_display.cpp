@@ -184,7 +184,11 @@ std::optional<DisplaySysexPayload> ParseDisplaySysex(const std::uint8_t* data, s
     return payload;
   }
 
-  if (payload.line1.empty() && payload.line2.empty()) {
+  // A plain two-line text command (04 xx 60 01 ...) with empty or blank lines is
+  // how a host lets go of the display; a real unit then shows nothing, so it
+  // clears the display. Other messages without text stay ignored.
+  const bool plain_text_command = bytes[6] == 0x04 && bytes[8] == 0x60 && bytes[9] == 0x01;
+  if (payload.line1.empty() && payload.line2.empty() && !plain_text_command) {
     return std::nullopt;
   }
 

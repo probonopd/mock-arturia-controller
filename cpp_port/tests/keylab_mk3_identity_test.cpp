@@ -11,10 +11,10 @@ int main() {
   using mock_arturia_controller::kModelConfig;
 
   assert(IsKeyLabModel(kModelConfig.model));
-  assert(KeyLabButtonControlChange(0, true) == 30);
-  assert(KeyLabButtonControlChange(1, true) == 31);
-  assert(KeyLabButtonControlChange(2, true) == 86);
-  assert(KeyLabButtonControlChange(3, true) == 87);
+  assert(KeyLabButtonControlChange(0) == 30);
+  assert(KeyLabButtonControlChange(1) == 31);
+  assert(KeyLabButtonControlChange(2) == 86);
+  assert(KeyLabButtonControlChange(3) == 87);
   assert(KeyLabEncoderControlChange(false) == 114);
   assert(KeyLabEncoderClickControlChange(false) == 115);
   assert(kModelConfig.vid == 0x1c75);

@@ -267,23 +267,23 @@ class ControllerApp {
     switch (mode_) {
       case ControllerMode::kArturia:
         if (index == 0) {
-          if (!keylab_menu_) {
-            send_control_change(kMidiPortMidi, mock_arturia_controller::KeyLabButtonControlChange(index, true), 0x7F);
-            keylab_menu_ = true;
-          }
+          // A real unit sends every press, also while its menu is already open
+          send_control_change(kMidiPortMidi, mock_arturia_controller::KeyLabButtonControlChange(index), 0x7F);
+          keylab_menu_ = true;
           return;
         }
         if (index == 1) {
-          send_control_change(kMidiPortMidi, mock_arturia_controller::KeyLabButtonControlChange(index, true), 0x7F);
+          send_control_change(kMidiPortMidi, mock_arturia_controller::KeyLabButtonControlChange(index), 0x7F);
           keylab_menu_ = false;
           return;
         }
         if (index == 4) {
-          const std::uint8_t cc = mock_arturia_controller::KeyLabEncoderClickControlChange(keylab_menu_);
-          send_control_change(kMidiPortMidi, cc, 0x7F);
+          // The release must go out on this CC too, even if Category or Preset changes the menu state meanwhile
+          click_cc_ = mock_arturia_controller::KeyLabEncoderClickControlChange(keylab_menu_);
+          send_control_change(kMidiPortMidi, click_cc_, 0x7F);
           return;
         }
-        send_control_change(kMidiPortMidi, mock_arturia_controller::KeyLabButtonControlChange(index, true), 0x7F);
+        send_control_change(kMidiPortMidi, mock_arturia_controller::KeyLabButtonControlChange(index), 0x7F);
         return;
       case ControllerMode::kDaw:
         if (index == 0) {
@@ -308,16 +308,11 @@ class ControllerApp {
   void on_keylab_button_up(std::uint8_t index) {
     switch (mode_) {
       case ControllerMode::kArturia:
-        if (index == 0) {
-          send_control_change(kMidiPortMidi, mock_arturia_controller::KeyLabButtonControlChange(index, false), 0x00);
-          return;
-        }
         if (index == 4) {
-          const std::uint8_t cc = mock_arturia_controller::KeyLabEncoderClickControlChange(keylab_menu_);
-          send_control_change(kMidiPortMidi, cc, 0x00);
+          send_control_change(kMidiPortMidi, click_cc_, 0x00);
           return;
         }
-        send_control_change(kMidiPortMidi, mock_arturia_controller::KeyLabButtonControlChange(index, false), 0x00);
+        send_control_change(kMidiPortMidi, mock_arturia_controller::KeyLabButtonControlChange(index), 0x00);
         return;
       case ControllerMode::kDaw:
         if (index == 0) {
@@ -464,17 +459,18 @@ class ControllerApp {
     cached_show_heart_ = payload.show_heart;
   }
 
+  // A changed line is written whole: writing only the characters that differ
+  // trusts that every earlier write reached the LCD, and one that got lost on
+  // the I2C bus would then stay on the display for good.
   void write_line_if_changed(std::string_view new_line, std::string_view old_line, std::uint8_t row) {
-    for (std::size_t index = 0; index < kDisplayColumns; ++index) {
-      const char wanted = (index < new_line.size()) ? new_line[index] : ' ';
-      const char current = (index < old_line.size()) ? old_line[index] : ' ';
-      if (wanted == current) {
-        continue;
-      }
-
-      lcd_.set_cursor(static_cast<std::uint8_t>(index), row);
-      lcd_.write(std::string_view(&wanted, 1));
+    if (new_line == old_line) {
+      return;
     }
+
+    std::string line(new_line.substr(0, kDisplayColumns));
+    line.resize(kDisplayColumns, ' ');
+    lcd_.set_cursor(0, row);
+    lcd_.write(line);
   }
 
   void send_control_change(std::uint8_t port, std::uint8_t control, std::uint8_t value) {
@@ -496,6 +492,7 @@ class ControllerApp {
   mock_arturia_controller::Pcf8574Lcd lcd_{i2c0, 0x27};
   ControllerMode mode_ = ControllerMode::kArturia;
   bool keylab_menu_ = false;
+  std::uint8_t click_cc_ = 0x73;
   bool shift_held_ = false;
   uint32_t last_encoder_step_ms_ = 0;
   std::string cached_line1_;

@@ -96,7 +96,10 @@ inline constexpr std::uint8_t EncoderClickControlChange(bool shift_held) {
   return shift_held ? kModelConfig.encoder_click_shift_cc : kModelConfig.encoder_click_cc;
 }
 
-inline constexpr std::uint8_t KeyLabButtonControlChange(std::uint8_t index, bool pressed) {
+// The CC of a button; its press (127) and its release (0) use the same one, as
+// on a real KeyLab Essential (firmware 1.1.10: the button scan reports both
+// edges and the CC helper sends 127 or 0 on the button's own CC).
+inline constexpr std::uint8_t KeyLabButtonControlChange(std::uint8_t index) {
   if (kModelConfig.model == EmulatedModel::kKeyLabEssentialMk3) {
     switch (index) {
       case 0: return 30;
@@ -108,10 +111,10 @@ inline constexpr std::uint8_t KeyLabButtonControlChange(std::uint8_t index, bool
   }
 
   switch (index) {
-    case 0: return pressed ? 0x74 : 0x75;
-    case 1: return pressed ? 0x75 : 0x1C;
-    case 2: return pressed ? 0x1C : 0x1D;
-    case 3: return pressed ? 0x1D : 0x74;
+    case 0: return 0x74;  // Category
+    case 1: return 0x75;  // Preset
+    case 2: return 0x1C;  // <-
+    case 3: return 0x1D;  // ->
     default: return 0;
   }
 }
