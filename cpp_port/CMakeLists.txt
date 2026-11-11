@@ -14,6 +14,18 @@ if(ENABLE_TESTS)
     tests/sysex_display_test.cpp
     src/sysex_display.cpp
   )
+  add_executable(sysex_assembler_tests
+    tests/sysex_assembler_test.cpp
+    src/sysex_display.cpp
+  )
+  target_include_directories(sysex_assembler_tests PRIVATE ${CMAKE_CURRENT_LIST_DIR})
+  target_compile_definitions(sysex_assembler_tests PRIVATE EMULATED_MODEL_KEYLAB_ESSENTIAL_61=1)
+  target_compile_options(sysex_assembler_tests PRIVATE -Wall -Wextra)
+  add_executable(usb_hang_detector_tests
+    tests/usb_hang_detector_test.cpp
+  )
+  target_include_directories(usb_hang_detector_tests PRIVATE ${CMAKE_CURRENT_LIST_DIR})
+  target_compile_options(usb_hang_detector_tests PRIVATE -Wall -Wextra)
   add_executable(usb_descriptor_layout_tests
     tests/usb_descriptor_layout_test.cpp
   )
@@ -89,6 +101,8 @@ if(ENABLE_TESTS)
 
   enable_testing()
   add_test(NAME sysex_display_tests COMMAND sysex_display_tests)
+  add_test(NAME sysex_assembler_tests COMMAND sysex_assembler_tests)
+  add_test(NAME usb_hang_detector_tests COMMAND usb_hang_detector_tests)
   add_test(NAME usb_descriptor_layout_tests COMMAND usb_descriptor_layout_tests)
   add_test(NAME encoder_click_mapping_tests COMMAND encoder_click_mapping_tests)
   add_test(NAME rotary_encoder_tests COMMAND rotary_encoder_tests)
@@ -113,6 +127,7 @@ add_executable(mock_arturia_controller_cpp
   usb_descriptors.cpp
   src/pcf8574_lcd.cpp
   src/sysex_display.cpp
+  src/usb_enumeration_fix.cpp
 )
 
 target_include_directories(mock_arturia_controller_cpp PRIVATE
@@ -123,6 +138,14 @@ target_include_directories(mock_arturia_controller_cpp PRIVATE
 target_compile_options(mock_arturia_controller_cpp PRIVATE -Wall -Wextra)
 target_compile_definitions(mock_arturia_controller_cpp PRIVATE
   EMULATED_MODEL_${EMULATED_MODEL}=1
+  # RP2040 erratum E5: behind a hub (every port of a Raspberry Pi 4) the B0/B1 chips' device controller can stay in the bus
+  # reset, and the host's address then gets no answer. The SDK's workaround is off unless asked for; on B2 chips it does
+  # nothing.
+  PICO_RP2040_USB_DEVICE_ENUMERATION_FIX=1
+  # TinyUSB calls rp2040_usb_device_enumeration_fix() on each bus reset; src/usb_enumeration_fix.cpp replaces the SDK's
+  # version (see there why), through the --wrap below
+  # a panic (in the USB driver above all) shows on the LCD (mock_panic in main.cpp)
+  PICO_PANIC_FUNCTION=mock_panic
 )
 
 target_link_libraries(mock_arturia_controller_cpp
@@ -130,9 +153,12 @@ target_link_libraries(mock_arturia_controller_cpp
   pico_time
   hardware_gpio
   hardware_i2c
+  hardware_watchdog
   tinyusb_device
   tinyusb_board
 )
+
+target_link_options(mock_arturia_controller_cpp PRIVATE -Wl,--wrap=rp2040_usb_device_enumeration_fix)
 
 pico_add_extra_outputs(mock_arturia_controller_cpp)
 

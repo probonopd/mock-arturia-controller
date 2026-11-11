@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cstdarg>
 #include <cstdio>
 #include <string>
 #include <string_view>
@@ -11,11 +12,15 @@
 #include "pico/bootrom.h"
 #include "pico/stdlib.h"
 #include "tusb.h"
+#include "hardware/structs/usb.h"
+#include "hardware/watchdog.h"
 
 #include "src/model_config.h"
 #include "src/pcf8574_lcd.h"
 #include "src/rotary_encoder.h"
+#include "src/sysex_assembler.h"
 #include "src/sysex_display.h"
+#include "src/usb_hang_detector.h"
 
 namespace {
 
@@ -116,6 +121,26 @@ class ControllerApp {
       handle_encoder();
       handle_buttons();
       handle_usb_midi();
+      recover_hung_usb();
+    }
+  }
+
+  // RP2040 erratum E15: behind the Raspberry Pi 4's USB 2.0 hub (VL805), full-speed traffic of another device on the same
+  // hub starting or stopping (the USB speaker's audio stream when Cobalt starts or quits) makes the hub corrupt packets with
+  // forced bit stuffing errors, and the device controller can hang on one: it answers nothing any more, the host sees every
+  // request stall, the display and the encoder are dead. The VL805 firmware update (0138c0) and TinyUSB's bulk IN workaround
+  // do not prevent it, and only a reset of the controller ends it. So a hang is answered as a replug would: the pull-up goes
+  // off long enough for the hub to see a disconnect, then the chip restarts and the host enumerates it afresh.
+  void recover_hung_usb() {
+    const std::uint32_t now = to_ms_since_boot(get_absolute_time());
+    const bool suspended = usb_hw->sie_status & USB_SIE_STATUS_SUSPENDED_BITS;
+    if (!usb_hang_detector_.hung(now, usb_hw->sof_rd & USB_SOF_RD_BITS, tud_mounted(), suspended)) {
+      return;
+    }
+    tud_disconnect();
+    sleep_ms(250);
+    watchdog_reboot(0, 0, 0);
+    while (true) {
     }
   }
 
@@ -353,38 +378,19 @@ class ControllerApp {
   }
 
   void handle_usb_midi() {
+    std::array<std::uint8_t, 64> bytes{};
     while (tud_midi_n_available(kMidiPortAlv, 0)) {
-      std::array<std::uint8_t, 4> packet{};
-      tud_midi_n_stream_read(kMidiPortAlv, 0, packet.data(), packet.size());
-
-      if (packet[0] == 0xF0) {
-        sysex_buffer_.fill(0);
-        sysex_length_ = 0;
-        sysex_in_progress_ = true;
-      }
-
-      if (!sysex_in_progress_) {
-        continue;
-      }
-
-      for (std::size_t index = 0; index < packet.size(); ++index) {
-        if (sysex_length_ >= sysex_buffer_.size()) {
-          sysex_in_progress_ = false;
-          break;
+      const std::uint32_t count = tud_midi_n_stream_read(kMidiPortAlv, 0, bytes.data(), bytes.size());
+      for (std::uint32_t index = 0; index < count; ++index) {
+        if (!sysex_.feed(bytes[index])) {
+          continue;
         }
-
-        sysex_buffer_[sysex_length_++] = packet[index];
-        if (packet[index] == 0xF7) {
-          if (is_display_sysex(sysex_buffer_.data(), sysex_length_)) {
-            reset_display_on_first_sysex();
-          }
-
-          const auto parsed = mock_arturia_controller::ParseDisplaySysex(sysex_buffer_.data(), sysex_length_);
-          if (parsed) {
-            apply_display_sysex(*parsed);
-          }
-          sysex_in_progress_ = false;
-          break;
+        if (is_display_sysex(sysex_.data(), sysex_.size())) {
+          reset_display_on_first_sysex();
+        }
+        const auto parsed = mock_arturia_controller::ParseDisplaySysex(sysex_.data(), sysex_.size());
+        if (parsed) {
+          apply_display_sysex(*parsed);
         }
       }
     }
@@ -503,12 +509,68 @@ class ControllerApp {
   bool up_arrow_loaded_ = false;
   bool down_arrow_loaded_ = false;
   bool first_display_sysex_seen_ = false;
-  std::array<std::uint8_t, 256> sysex_buffer_{};
-  std::size_t sysex_length_ = 0;
-  bool sysex_in_progress_ = false;
+  mock_arturia_controller::UsbHangDetector usb_hang_detector_;
+  mock_arturia_controller::SysexAssembler sysex_;
 };
 
 }  // namespace
+
+// The firmware's panic() on the LCD. A panic in the USB driver stops the chip, which then looks like a device whose display and
+// encoder are dead; without a debug probe the display is the only place its message can be read. It may run inside an
+// interrupt handler, so it writes the already initialized display directly, with busy waits instead of sleeps.
+static void panic_lcd_nibble(std::uint8_t nibble, bool is_data) {
+  const std::uint8_t byte = static_cast<std::uint8_t>((nibble << 4) | (is_data ? 0x01 : 0x00) | 0x08);
+  const std::uint8_t pulse = static_cast<std::uint8_t>(byte | 0x04);
+  i2c_write_blocking(i2c0, 0x27, &byte, 1, false);
+  i2c_write_blocking(i2c0, 0x27, &pulse, 1, false);
+  busy_wait_us_32(1);
+  i2c_write_blocking(i2c0, 0x27, &byte, 1, false);
+  busy_wait_us_32(50);
+}
+
+static void panic_lcd_line(std::uint8_t address, const char* text) {
+  for (int half = 4; half >= 0; half -= 4) {
+    panic_lcd_nibble(static_cast<std::uint8_t>((address >> half) & 0x0F), false);
+  }
+  busy_wait_us_32(2000);
+  for (int i = 0; i < 16; ++i) {
+    const char ch = *text ? *text++ : ' ';
+    panic_lcd_nibble(static_cast<std::uint8_t>(ch >> 4), true);
+    panic_lcd_nibble(static_cast<std::uint8_t>(ch & 0x0F), true);
+  }
+}
+
+// A message such as "Hard assert" does not say which assertion failed, so the panic screen also shows flash offsets of code
+// addresses: the return address and the first two found on the stack, for addr2line against the ELF.
+static std::uint32_t panic_code_offset(std::uint32_t word) {
+  return (word & 0xFF000001u) == 0x10000001u ? (word & 0x00FFFFFEu) : 0;
+}
+
+extern "C" void __attribute__((noreturn)) mock_panic(const char* fmt, ...) {
+  const std::uint32_t lr = reinterpret_cast<std::uint32_t>(__builtin_return_address(0));
+  std::uint32_t found[2] = {0, 0};
+  const std::uint32_t* sp;
+  asm volatile("mov %0, sp" : "=r"(sp));
+  for (int i = 0, n = 0; i < 128 && n < 2; ++i) {
+    const std::uint32_t offset = panic_code_offset(sp[i]);
+    if (offset) {
+      found[n++] = offset;
+    }
+  }
+  char text[64];
+  va_list args;
+  va_start(args, fmt);
+  vsnprintf(text, sizeof text, fmt, args);
+  va_end(args);
+  char line1[17];
+  char line2[17];
+  snprintf(line1, sizeof line1, "%-9.9s %06lx", text, static_cast<unsigned long>(lr & 0x00FFFFFEu));
+  snprintf(line2, sizeof line2, "%06lx %06lx", static_cast<unsigned long>(found[0]), static_cast<unsigned long>(found[1]));
+  panic_lcd_line(0x80, line1);
+  panic_lcd_line(0xC0, line2);
+  while (true) {
+  }
+}
 
 void tud_mount_cb(void) {
 }
@@ -555,6 +617,13 @@ int main(void) {
     reset_usb_boot(0, 0);
   }
 
+  // The display, buttons and encoder are set up before USB: tusb_init() makes the device visible on the bus, and from then
+  // on only tud_task() answers the host. While the LCD initialized (tens of milliseconds of HD44780 waits) nothing did, and a
+  // host that enumerates at once - a Raspberry Pi 4 that powers the Pico from its own boot on - got no answer, gave up
+  // ("device not accepting address, error -71") and only a replug brought the device back.
+  ControllerApp app;
+  app.init();
+
   tusb_rhport_init_t dev_init = {
     .role = TUSB_ROLE_DEVICE,
     .speed = TUSB_SPEED_AUTO,
@@ -565,7 +634,5 @@ int main(void) {
     board_init_after_tusb();
   }
 
-  ControllerApp app;
-  app.init();
   app.run();
 }
